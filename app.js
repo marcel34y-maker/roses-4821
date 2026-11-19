@@ -5,6 +5,8 @@
 const CONFIG = {
   herName: "beautiful",          // shows as "Good morning, beautiful". Put her name or a nickname.
   fromName: "Marcel",            // signs every note
+  signOff: "Love,",              // shows as "Love, Marcel" under each note
+  newDayHour: 8,                 // new bouquet + note each day at 8:00 am her time
   firstDay: "2026-11-18",        // first day of bouquets; history never goes earlier than this
 };
 
@@ -99,7 +101,9 @@ function noteFor(dateKey) {
 
 /* ---------- UI ---------- */
 const $ = (id) => document.getElementById(id);
-const todayKey = ymd(new Date());
+// the "day" flips at newDayHour, not midnight (before 8 am it's still yesterday's bouquet)
+const currentDayKey = () => ymd(new Date(Date.now() - CONFIG.newDayHour * 3600 * 1000));
+const todayKey = currentDayKey();
 let selected = todayKey;
 let scene = null;
 
@@ -146,7 +150,7 @@ function showDay(key, animate) {
   note.classList.toggle("still", !animate);
   if (text) {
     $("note-text").textContent = text;
-    $("note-sign").textContent = `— ${CONFIG.fromName}`;
+    $("note-sign").textContent = `${CONFIG.signOff} ${CONFIG.fromName}`;
     note.hidden = false;
   } else {
     note.hidden = true;
@@ -181,7 +185,7 @@ function renderDays() {
 function showGift() {
   selected = todayKey;
   $("greeting").textContent = greeting();
-  $("date").textContent = longDate(new Date());
+  $("date").textContent = longDate(parseYmd(todayKey));
   ["bouquet", "bouquet-name", "hint", "note"].forEach((id) => ($(id).hidden = true));
   const gift = $("gift");
   gift.classList.remove("opening");
@@ -197,10 +201,10 @@ $("gift").addEventListener("click", () => {
   setTimeout(() => showDay(todayKey, true), 700);
 });
 
-/* if the app stays open past midnight, roll over to the new day */
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && ymd(new Date()) !== todayKey) location.reload();
-});
+/* if the app is open (or reopened) when the new day starts at 8 am, roll over */
+const rollover = () => { if (currentDayKey() !== todayKey) location.reload(); };
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") rollover(); });
+setInterval(rollover, 60 * 1000);
 
 // for testing: open the app with ?day=2026-12-25 to preview any day's bouquet
 const preview = new URLSearchParams(location.search).get("day");
