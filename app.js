@@ -71,9 +71,27 @@ function chooseColor(mix, r) {
   return Object.keys(mix)[0];
 }
 
+// never the same color mix two days in a row (from this date on; earlier days stay as she saw them)
+const NO_REPEAT_FROM = "2026-11-20";
+const rawStyle = (key) => Math.floor(rng("roses:" + key)() * STYLES.length);
+function styleIndexFor(dateKey) {
+  if (dateKey < NO_REPEAT_FROM) return rawStyle(dateKey);
+  let d = addDays(parseYmd(dateKey), -60);
+  if (ymd(d) < NO_REPEAT_FROM) d = addDays(parseYmd(NO_REPEAT_FROM), -1);
+  let prev = rawStyle(ymd(d)), idx = prev;
+  for (d = addDays(d, 1); ymd(d) <= dateKey; d = addDays(d, 1)) {
+    const key = ymd(d);
+    idx = rawStyle(key);
+    if (idx === prev) idx = (idx + 1 + (seedFrom("shift:" + key) % (STYLES.length - 1))) % STYLES.length;
+    prev = idx;
+  }
+  return idx;
+}
+
 function planFor(dateKey) {
   const r = rng("roses:" + dateKey);
-  const style = r.pick(STYLES);
+  r();                                              // keep the random sequence the same as before
+  const style = STYLES[styleIndexFor(dateKey)];
   const wrap = r.pick(WRAPS);
   let ribbon = r.pick(RIBBONS);
   if (wrap === WRAPS[2] && ribbon === "#fffaf2") ribbon = "#b3122b";

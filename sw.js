@@ -1,5 +1,5 @@
 // Offline support. Bump the version if you change the app and want it to refresh right away.
-const CACHE = "roses-v3";
+const CACHE = "roses-v4";
 const SHELL = [
   "./", "index.html", "style.css", "app.js", "bouquet3d.js", "vendor/three.js", "manifest.json", "notes.json",
   "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
