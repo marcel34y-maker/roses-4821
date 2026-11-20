@@ -14,7 +14,9 @@ export const ROSE_COLORS = {
   pink:  { petal: "#f290b0", sheen: "#ffe0ea" },
   white: { petal: "#fbf4ea", sheen: "#ffffff" },
   sunflower: { petal: "#f5b301", sheen: "#fff1b8" },
+  lily: { petal: "#f6b3c9", sheen: "#ffffff" },
 };
+const isRose = (c) => c === "red" || c === "pink" || c === "white";
 const SUN_RAYS = 34, SUN_SEEDS = 80;
 
 const PETALS = 24;
@@ -118,6 +120,96 @@ function paperGeometry(frontDrop, wave, phase, rTop) {
   return g;
 }
 
+// Lily petal (tepal): long, pointed, curls back at the tip, white with a pink stripe and speckles.
+function tepalGeometry(inner) {
+  const L = inner ? 1.05 : 1.12, W = inner ? 0.3 : 0.22;
+  const cols = 11, rows = 18, pos = [], col = [], idx = [];
+  const white = [1, 0.97, 0.97], pink = [0.95, 0.45, 0.64], deep = [0.78, 0.2, 0.45], lime = [0.86, 0.92, 0.62];
+  const mix = (a, b, t) => a.map((x, i) => x + (b[i] - x) * t);
+  const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+  for (let r = 0; r < rows; r++) {
+    const v = r / (rows - 1);
+    for (let c = 0; c < cols; c++) {
+      const u = (c / (cols - 1)) * 2 - 1;
+      const w = W * Math.sin(Math.PI * Math.pow(v, 0.68)) * (v < 0.04 ? 0.5 : 1);
+      const x = u * w;
+      const y = v * L;
+      let z = -u * u * w * 0.35;                                  // cupped across
+      z += 0.9 * Math.pow(Math.max(0, v - 0.45), 2) * 2.2;          // tip curls back
+      z += 0.025 * Math.sin(v * 22 + c) * Math.abs(u);              // wavy edges
+      pos.push(x, y, z);
+      const stripe = Math.pow(1 - Math.abs(u), 1.4) * smooth(0.04, 0.3, v) * (1 - 0.55 * smooth(0.7, 1, v));
+      let cc = mix(white, pink, stripe * 0.95);
+      if (v < 0.14) cc = mix(cc, lime, 1 - v / 0.14);
+      const speck = Math.abs(Math.sin(r * 12.9898 + c * 78.233) * 43758.5453) % 1;
+      if (speck < 0.09 && v > 0.15 && v < 0.62 && Math.abs(u) < 0.75) cc = deep;
+      col.push(...cc);
+    }
+  }
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
+      idx.push(a, d, b, b, d, e);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// Lily center: 6 stamens with rusty anthers + a pistil, merged into one piece.
+function stamenGeometry() {
+  const parts = [];
+  const paint = (geo, hex) => {
+    const c = new THREE.Color(hex), n = geo.attributes.position.count, arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+    geo.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+    geo.deleteAttribute("uv");
+    return geo;
+  };
+  for (let i = 0; i < 7; i++) {
+    const pistil = i === 6;
+    const a = (i / 6) * Math.PI * 2;
+    const spread = pistil ? 0.05 : 0.32;
+    const tip = new THREE.Vector3(Math.cos(a) * spread, pistil ? 0.85 : 0.72, Math.sin(a) * spread);
+    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(tip.x * 0.3, tip.y * 0.6, tip.z * 0.3), tip);
+    parts.push(paint(new THREE.TubeGeometry(curve, 8, pistil ? 0.022 : 0.014, 4, false), "#dfe9b8"));
+    const head = new THREE.SphereGeometry(1, 8, 6);
+    head.scale(pistil ? 0.045 : 0.025, pistil ? 0.04 : 0.025, pistil ? 0.045 : 0.075);
+    head.lookAt(new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)));
+    head.translate(tip.x, tip.y, tip.z);
+    parts.push(paint(head, pistil ? "#cfe0a0" : "#8a3510"));
+  }
+  return mergeGeometries(parts);
+}
+
+// Closed lily bud: a long green spindle that blushes at the tip.
+function budGeometry() {
+  const pts = [];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16;
+    pts.push(new THREE.Vector2(0.13 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.9) + 0.012, t));
+  }
+  const g = new THREE.LatheGeometry(pts, 12);
+  const n = g.attributes.position.count, arr = new Float32Array(n * 3);
+  const base = new THREE.Color("#9cc46a"), mid = new THREE.Color("#d4e7a4"), tip = new THREE.Color("#f3e9e2"), c = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const t = g.attributes.position.getY(i);
+    c.copy(base).lerp(mid, clamp01(t * 1.6)).lerp(tip, clamp01((t - 0.65) / 0.35) * 0.7);
+    arr.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+  return g;
+}
+
+// Silver-dollar eucalyptus: a round, slightly cupped leaf.
+function roundLeafGeometry() {
+  const g = leafGeometry(0.42, 0.24, 0.05, 0.05);
+  return g;
+}
+
 function heartGeometry() {
   const s = new THREE.Shape();
   s.moveTo(0, -0.35);
@@ -141,6 +233,12 @@ const SHARED = {
   ray: leafGeometry(0.62, 0.12, 0.05, 0.06),
   disk: new THREE.SphereGeometry(1, 28, 14),
   seed: new THREE.IcosahedronGeometry(1, 0),
+  tepalOuter: tepalGeometry(false),
+  tepalInner: tepalGeometry(true),
+  stamens: stamenGeometry(),
+  lilyBud: budGeometry(),
+  dollar: roundLeafGeometry(),
+  willow: leafGeometry(1.25, 0.12, 0.05, 0.3),
 };
 
 /* ---------- the scene ---------- */
@@ -225,9 +323,14 @@ export class Bouquet3D {
 
     /* rose head placement on a dome */
     const n = plan.roses.length;
-    const center = new THREE.Vector3(0, 0.2, 0);
-    const R = 1.8, cap = 1 - Math.cos(THREE.MathUtils.degToRad(84));
-    const conv = new THREE.Vector3(0, -2.0, 0);
+    const vase = !!plan.vase;
+    this.vase = vase;
+    this.baseScale = vase ? 0.8 : 1;
+    this.baseY = vase ? -0.55 : 0;
+    const center = vase ? new THREE.Vector3(0, 1.45, 0) : new THREE.Vector3(0, 0.2, 0);
+    const R = 1.8, cap = 1 - Math.cos(THREE.MathUtils.degToRad(vase ? 100 : 84));
+    const stretchY = vase ? 0.9 : 1;
+    const conv = vase ? new THREE.Vector3(0, -0.1, 0) : new THREE.Vector3(0, -2.0, 0);
     const up = new THREE.Vector3(0, 1, 0);
     const startPhi = r() * Math.PI * 2;
     this.roses = plan.roses.map((ro, k) => {
@@ -235,14 +338,16 @@ export class Bouquet3D {
       const ring = Math.sqrt(1 - z * z);
       const phi = startPhi + k * GOLDEN;
       const dir = new THREE.Vector3(ring * Math.cos(phi), z, ring * Math.sin(phi));
-      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()));
+      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (ro.color === "lily" ? 0.35 : -0.1) : 0));
+      pos.y = center.y + (pos.y - center.y) * stretchY;
       pos.x += lerp(-0.08, 0.08, r()); pos.z += lerp(-0.08, 0.08, r());
       const axis = pos.clone().sub(conv).normalize().lerp(dir, 0.6).normalize();
       const q = new THREE.Quaternion().setFromUnitVectors(up, axis)
         .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI * 2));
       return {
         color: ro.color, pos, axis, q,
-        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : 1),
+        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : ro.color === "lily" ? 1.75 : 1),
+        tint: lerp(0, 1, r()),
         phase: r() * Math.PI * 2,
         delay: animate ? 0.25 + k * 0.07 + r() * 0.15 : -10,
         pop: 0, popT: -10,
@@ -291,20 +396,64 @@ export class Bouquet3D {
       this.sun = { rays, disk, calyx, seeds, tilts: Array.from({ length: SUN_RAYS }, () => lerp(-0.12, 0.12, r())) };
     }
 
+    /* lilies (only built when the bouquet has some) */
+    this.lily = null;
+    if (this.roses.some((ro) => ro.color === "lily")) {
+      const lilyMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5, sheen: 0.6, sheenColor: new THREE.Color("#ffffff") });
+      const outer = new THREE.InstancedMesh(SHARED.tepalOuter, lilyMat, n * 3);
+      const inner = new THREE.InstancedMesh(SHARED.tepalInner, lilyMat, n * 3);
+      const stamens = new THREE.InstancedMesh(SHARED.stamens, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }), n);
+      [outer, inner, stamens].forEach((mesh) => { mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; g.add(mesh); });
+      this.roses.forEach((ro, k) => {
+        // some lilies blush pinker, some stay nearly white
+        tint.setRGB(1, lerp(0.8, 1, ro.tint), lerp(0.86, 1, ro.tint));
+        for (let j = 0; j < 3; j++) { outer.setColorAt(k * 3 + j, tint); inner.setColorAt(k * 3 + j, tint); }
+      });
+      this.lily = { outer, inner, stamens };
+    }
+
     /* stems, merged into one mesh */
-    const stems = this.roses.map((ro) => {
-      const base = ro.pos.clone().addScaledVector(ro.axis, -0.12);
-      const mid = base.clone().lerp(conv, 0.5).addScaledVector(ro.axis, 0.2);
+    const stemFor = (pos, axis, extraTop = 0) => {
+      const base = pos.clone().addScaledVector(axis, -0.12 - extraTop);
+      if (vase) {
+        // stems cross inside the glass, like real cut flowers
+        const a = r() * Math.PI * 2, rad = lerp(0.1, 0.5, r());
+        const mouth = new THREE.Vector3(Math.cos(a) * rad, -0.1, Math.sin(a) * rad);
+        const bottom = new THREE.Vector3(-Math.cos(a) * rad * 0.9, -2.45, -Math.sin(a) * rad * 0.9);
+        const mid = base.clone().lerp(mouth, 0.5).addScaledVector(axis, 0.15);
+        return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([base, mid, mouth, bottom]), 28, 0.04, 5, false);
+      }
+      const mid = base.clone().lerp(conv, 0.5).addScaledVector(axis, 0.2);
       const c2 = conv.clone().add(new THREE.Vector3(lerp(-0.08, 0.08, r()), 0, lerp(-0.08, 0.08, r())));
       const end = new THREE.Vector3(lerp(-0.22, 0.22, r()), -3.35, lerp(-0.22, 0.22, r()));
       return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([base, mid, c2, end]), 24, 0.04, 5, false);
-    });
-    const stemMesh = new THREE.Mesh(mergeGeometries(stems), new THREE.MeshStandardMaterial({ color: "#3f6b3a", roughness: 0.8 }));
+    };
+    const stems = this.roses.map((ro) => stemFor(ro.pos, ro.axis));
+
+    /* lily buds standing up out of the arrangement */
+    const budCount = plan.buds || 0;
+    if (budCount) {
+      const buds = new THREE.InstancedMesh(SHARED.lilyBud, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }), budCount);
+      const mm = new THREE.Matrix4(), qq = new THREE.Quaternion(), ss = new THREE.Vector3();
+      for (let i = 0; i < budCount; i++) {
+        const phi = (i / budCount) * Math.PI * 2 + lerp(-0.3, 0.3, r()), pol = THREE.MathUtils.degToRad(lerp(18, 62, r()));
+        const dir = new THREE.Vector3(Math.sin(pol) * Math.cos(phi), Math.cos(pol), Math.sin(pol) * Math.sin(phi));
+        const p = center.clone().add(new THREE.Vector3(dir.x * 2.2, dir.y * 2.0 + 0.2, dir.z * 2.2));
+        const axis = p.clone().sub(conv).normalize().lerp(dir, 0.4).normalize();
+        qq.setFromUnitVectors(up, axis);
+        const sc = lerp(0.7, 0.95, r());
+        mm.compose(p, qq, ss.set(sc, sc, sc));
+        buds.setMatrixAt(i, mm);
+        stems.push(stemFor(p, axis, -0.12));
+      }
+      g.add(buds);
+    }
+    const stemMesh = new THREE.Mesh(mergeGeometries(stems), new THREE.MeshStandardMaterial({ color: vase ? "#6f9a52" : "#3f6b3a", roughness: 0.7 }));
     stems.forEach((s) => s.dispose());
     g.add(stemMesh);
 
     /* leaves around the edge */
-    const leafCount = 14;
+    const leafCount = vase ? 0 : 14;
     const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, side: THREE.DoubleSide });
     const leaves = new THREE.InstancedMesh(SHARED.leaf, leafMat, leafCount);
     const greens = ["#4f8a47", "#5f9a55", "#3f7a3c", "#6aa35e"];
@@ -330,8 +479,9 @@ export class Bouquet3D {
     );
     mound.scale.set(1.75, 1.45, 1.75);
     mound.position.copy(center).add(new THREE.Vector3(0, -0.15, 0));
+    if (vase) { mound.material.color.set("#5d7c6a"); mound.scale.set(1.05, 0.95, 1.05); mound.position.y -= 0.5; }
     g.add(mound);
-    const fillCount = 70;
+    const fillCount = vase ? 0 : 70;
     const fill = new THREE.InstancedMesh(SHARED.leaf, leafMat, fillCount);
     for (let i = 0; i < fillCount; i++) {
       const phi = i * GOLDEN + r() * 0.4;
@@ -347,8 +497,10 @@ export class Bouquet3D {
     }
     g.add(fill);
 
+    if (vase) this.addEucalyptus(g, center, r);
+
     /* baby's breath */
-    if (plan.filler) {
+    if (plan.filler && !vase) {
       const count = 70;
       const bb = new THREE.InstancedMesh(SHARED.bud, new THREE.MeshStandardMaterial({ color: "#fffdf7", roughness: 0.6 }), count);
       let k = 0;
@@ -365,6 +517,8 @@ export class Bouquet3D {
       }
       g.add(bb);
     }
+
+    if (vase) { this.addVase(g); this.updateRoses(0); return; }
 
     /* wrapping paper (two layers) */
     const paperMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.92, side: THREE.DoubleSide });
@@ -396,6 +550,109 @@ export class Bouquet3D {
     g.add(bow);
 
     this.updateRoses(0);
+  }
+
+  addEucalyptus(g, center, r) {
+    const up = new THREE.Vector3(0, 1, 0);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), tint = new THREE.Color();
+    const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide });
+    const silver = ["#8fa79b", "#9fb5aa", "#7f998d", "#a9bdb2", "#86a094"];
+
+    // silver-dollar leaves: a shell around the flowers + sprigs spilling out over the edges
+    const sprigs = 12, perSprig = 11, shell = 190;
+    const dollars = new THREE.InstancedMesh(SHARED.dollar, leafMat, shell + sprigs * perSprig);
+    let k = 0;
+    for (let i = 0; i < shell; i++, k++) {
+      const phi = i * GOLDEN + r() * 0.3;
+      const pol = Math.acos(1 - ((i + 0.5) / shell) * (1 - Math.cos(THREE.MathUtils.degToRad(118))));
+      const dir = new THREE.Vector3(Math.sin(pol) * Math.cos(phi), Math.cos(pol), Math.sin(pol) * Math.sin(phi));
+      const rad = lerp(1.15, 1.6, r());
+      const p = center.clone().add(new THREE.Vector3(dir.x * rad, dir.y * rad * 0.85 - 0.25, dir.z * rad));
+      q.setFromUnitVectors(up, dir.clone().add(new THREE.Vector3(lerp(-0.4, 0.4, r()), lerp(-0.2, 0.4, r()), lerp(-0.4, 0.4, r()))).normalize())
+        .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI));
+      const sc = lerp(0.8, 1.15, r());
+      dollars.setMatrixAt(k, m.compose(p, q, s.set(sc, sc, sc)));
+      dollars.setColorAt(k, tint.set(silver[i % silver.length]));
+    }
+    for (let j = 0; j < sprigs; j++) {
+      const phi = (j / sprigs) * Math.PI * 2 + r() * 0.4;
+      const out = new THREE.Vector3(Math.cos(phi), lerp(-0.15, 0.55, r()), Math.sin(phi)).normalize();
+      const start = center.clone().addScaledVector(out, 1.25).add(new THREE.Vector3(0, -0.2, 0));
+      for (let i = 0; i < perSprig; i++, k++) {
+        const t = i / (perSprig - 1);
+        const p = start.clone().addScaledVector(out, t * 1.35);
+        p.y -= t * t * 0.35;                                     // droops under its own weight
+        const side = new THREE.Vector3(-out.z, 0, out.x).multiplyScalar((i % 2 ? 1 : -1) * 0.1);
+        p.add(side);
+        q.setFromUnitVectors(up, out.clone().add(side.clone().multiplyScalar(6)).add(new THREE.Vector3(0, 0.3, 0)).normalize());
+        const sc = lerp(0.95, 0.6, t);
+        dollars.setMatrixAt(k, m.compose(p, q, s.set(sc, sc, sc)));
+        dollars.setColorAt(k, tint.set(silver[(i + j) % silver.length]));
+      }
+    }
+    g.add(dollars);
+
+    // long willow-eucalyptus leaves poking out
+    const willowCount = 24;
+    const willows = new THREE.InstancedMesh(SHARED.willow, leafMat, willowCount);
+    const darks = ["#5d7a66", "#6c8a73", "#526f5c"];
+    for (let i = 0; i < willowCount; i++) {
+      const phi = r() * Math.PI * 2, pol = THREE.MathUtils.degToRad(lerp(20, 105, r()));
+      const dir = new THREE.Vector3(Math.sin(pol) * Math.cos(phi), Math.cos(pol), Math.sin(pol) * Math.sin(phi));
+      const p = center.clone().add(new THREE.Vector3(dir.x * 1.5, dir.y * 1.3 - 0.2, dir.z * 1.5));
+      q.setFromUnitVectors(up, dir.clone().add(new THREE.Vector3(0, 0.3, 0)).normalize()).multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI));
+      const sc = lerp(0.8, 1.2, r());
+      willows.setMatrixAt(i, m.compose(p, q, s.set(sc, sc, sc)));
+      willows.setColorAt(i, tint.set(darks[i % darks.length]));
+    }
+    g.add(willows);
+
+    // seeded eucalyptus: little clusters of berries
+    const clusters = 12, perCluster = 16;
+    const berries = new THREE.InstancedMesh(SHARED.bud, new THREE.MeshStandardMaterial({ roughness: 0.8 }), clusters * perCluster);
+    const berryColors = ["#a9ae86", "#c0b394", "#919e78", "#b7a48c"];
+    k = 0;
+    for (let c = 0; c < clusters; c++) {
+      const phi = r() * Math.PI * 2, pol = THREE.MathUtils.degToRad(lerp(35, 118, r()));
+      const dir = new THREE.Vector3(Math.sin(pol) * Math.cos(phi), Math.cos(pol), Math.sin(pol) * Math.sin(phi));
+      const cc = center.clone().add(new THREE.Vector3(dir.x * 1.95, dir.y * 1.55 - 0.3, dir.z * 1.95));
+      for (let i = 0; i < perCluster; i++, k++) {
+        const p = cc.clone().add(new THREE.Vector3(lerp(-0.22, 0.22, r()), lerp(-0.2, 0.15, r()), lerp(-0.22, 0.22, r())));
+        const sc = lerp(0.03, 0.05, r());
+        berries.setMatrixAt(k, m.compose(p, q.identity(), s.set(sc, sc, sc)));
+        berries.setColorAt(k, tint.set(berryColors[(c + i) % berryColors.length]));
+      }
+    }
+    g.add(berries);
+  }
+
+  addVase(g) {
+    const glass = (opacity, color = "#eef7f6") => new THREE.MeshPhysicalMaterial({
+      color, transparent: true, opacity, roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.82, 2.7, 56, 1, true), glass(0.2));
+    body.position.y = -1.35;
+    body.renderOrder = 3;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.028, 8, 56), glass(0.55, "#ffffff"));
+    rim.rotation.x = Math.PI / 2;
+    rim.renderOrder = 3;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.82, 0.2, 56), glass(0.38, "#dfeeed"));
+    base.position.y = -2.6;
+    base.renderOrder = 2;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.78, 1.65, 56), glass(0.14, "#cfe8ea"));
+    water.position.y = -2.5 + 0.825;
+    water.renderOrder = 1;
+    // a soft vertical highlight so the glass reads as glass
+    const shine = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 2.3), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.35, depthWrite: false }));
+    shine.position.set(0.5, -1.3, 0.66);
+    shine.rotation.y = 0.65;
+    shine.renderOrder = 4;
+    g.add(water, base, body, rim, shine);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.2, 40), new THREE.MeshBasicMaterial({ color: "#7a3a44", transparent: true, opacity: 0.08, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = -2.72;
+    g.add(shadow);
   }
 
   clear() {
@@ -430,10 +687,12 @@ export class Bouquet3D {
       const s = ro.scale * grow * (1 + pop * 0.18);
       head.compose(pos, tmpQ, scl.set(s, s, s));
       const isSun = ro.color === "sunflower";
+      const isLily = ro.color === "lily";
 
       if (this.sun) this.updateSunflower(k, isSun ? head : null, open, pop);
+      if (this.lily) this.updateLily(k, isLily ? head : null, open, pop);
       for (let i = 0; i < PETALS; i++) {
-        if (isSun) { this.petalMeshes[i].setMatrixAt(k, ZERO); continue; }
+        if (!isRose(ro.color)) { this.petalMeshes[i].setMatrixAt(k, ZERO); continue; }
         const ti = i / (PETALS - 1);
         const closed = -(0.25 + 0.9 * ti) * (1 - open);       // bud -> open
         const extra = pop * 0.45 * ti;                         // tap: petals relax open
@@ -449,12 +708,37 @@ export class Bouquet3D {
         p.multiplyMatrices(ry, rx);
         p.setPosition(0, -0.05, 0);
         m.multiplyMatrices(head, p);
-        this.sepals.setMatrixAt(k * 5 + j, m);
+        this.sepals.setMatrixAt(k * 5 + j, isLily ? ZERO : m);
       }
     });
     this.petalMeshes.forEach((mesh) => (mesh.instanceMatrix.needsUpdate = true));
     this.sepals.instanceMatrix.needsUpdate = true;
     if (this.sun) ["rays", "disk", "calyx", "seeds"].forEach((key) => (this.sun[key].instanceMatrix.needsUpdate = true));
+    if (this.lily) ["outer", "inner", "stamens"].forEach((key) => (this.lily[key].instanceMatrix.needsUpdate = true));
+  }
+
+  // six petals that open from a closed trumpet into a star, tips curling back
+  updateLily(k, head, open, pop) {
+    const { outer, inner, stamens } = this.lily;
+    if (!head) {
+      for (let j = 0; j < 3; j++) { outer.setMatrixAt(k * 3 + j, ZERO); inner.setMatrixAt(k * 3 + j, ZERO); }
+      stamens.setMatrixAt(k, ZERO);
+      return;
+    }
+    const m = new THREE.Matrix4(), p = new THREE.Matrix4(), ry = new THREE.Matrix4(), rx = new THREE.Matrix4(), tr = new THREE.Matrix4();
+    for (let i = 0; i < 6; i++) {
+      const isInner = i % 2 === 1;
+      const tilt = lerp(0.12, isInner ? 0.92 : 1.05, open) + pop * 0.2;
+      ry.makeRotationY((i / 6) * Math.PI * 2);
+      tr.makeTranslation(0, 0, 0.04);
+      rx.makeRotationX(tilt);
+      p.multiplyMatrices(ry, tr).multiply(rx);
+      m.multiplyMatrices(head, p);
+      (isInner ? inner : outer).setMatrixAt(k * 3 + (i >> 1), m);
+    }
+    const st = 0.3 + 0.7 * open;
+    p.makeScale(st, st, st);
+    stamens.setMatrixAt(k, m.multiplyMatrices(head, p));
   }
 
   // head = this sunflower's matrix, or null to hide sunflower parts on a rose
@@ -504,9 +788,12 @@ export class Bouquet3D {
     this.raycaster.setFromCamera(ndc, this.camera);
     const targets = [...this.petalMeshes];
     if (this.sun) targets.push(this.sun.rays, this.sun.disk);
+    if (this.lily) targets.push(this.lily.outer, this.lily.inner);
     const hit = this.raycaster.intersectObjects(targets, false)[0];
     if (!hit || hit.instanceId == null) return;
-    const id = this.sun && hit.object === this.sun.rays ? Math.floor(hit.instanceId / SUN_RAYS) : hit.instanceId;
+    let id = hit.instanceId;
+    if (this.sun && hit.object === this.sun.rays) id = Math.floor(id / SUN_RAYS);
+    if (this.lily && (hit.object === this.lily.outer || hit.object === this.lily.inner)) id = Math.floor(id / 3);
     const ro = this.roses[id];
     ro.popT = this.clock.getElapsedTime();
     this.onInteract?.();
@@ -540,8 +827,8 @@ export class Bouquet3D {
     if (this.group) {
       const t = now - this.start;
       const intro = this.animate ? easeOutCubic(clamp01(t / 0.9)) : 1;
-      this.group.scale.setScalar(0.75 + 0.25 * intro);
-      this.group.position.y = (1 - intro) * -0.8 + Math.sin(now * 0.8) * 0.04;
+      this.group.scale.setScalar((0.75 + 0.25 * intro) * (this.baseScale || 1));
+      this.group.position.y = (this.baseY || 0) + (1 - intro) * -0.8 + Math.sin(now * 0.8) * 0.04;
       this.group.rotation.z = Math.sin(now * 0.6) * 0.015;
       this.updateRoses(t);
     }

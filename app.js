@@ -61,6 +61,7 @@ const SPECIAL_STYLES = [
   { name: "Sunflowers", mix: { sunflower: 1 }, count: [13, 16] },
   { name: "Sunshine",   mix: { sunflower: 0.6, white: 0.4 } },
   { name: "Sunset",     mix: { sunflower: 0.5, red: 0.5 } },
+  { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 
 const WRAPS = [
@@ -107,7 +108,7 @@ function planFor(dateKey) {
   const [lo, hi] = style.count || [19, 25];         // 19–25 roses by default
   const count = lo + Math.floor(r() * (hi - lo + 1));
   const roses = Array.from({ length: count }, () => ({ color: chooseColor(style.mix, r) }));
-  return { name: style.name, wrap, ribbon, roses, filler: r() < 0.6, r };
+  return { name: style.name, wrap, ribbon, roses, filler: r() < 0.6, vase: !!style.vase, buds: style.buds || 0, r };
 }
 
 /* ---------- notes ---------- */
@@ -168,7 +169,8 @@ function showDay(key, animate) {
   getScene().build(plan, plan.r, animate);
 
   const label = $("bouquet-name");
-  const kinds = plan.roses.every((x) => x.color === "sunflower") ? "sunflowers" : plan.roses.some((x) => x.color === "sunflower") ? "flowers" : "roses";
+  const allOf = (c) => plan.roses.every((x) => x.color === c);
+  const kinds = allOf("sunflower") ? "sunflowers" : plan.roses.every((x) => ["red", "pink", "white"].includes(x.color)) ? "roses" : "flowers";
   label.textContent = `${plan.name} · ${plan.roses.length} ${kinds}`;
   label.hidden = false;
   $("hint").hidden = false;
