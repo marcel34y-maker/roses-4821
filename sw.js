@@ -1,5 +1,5 @@
-// Offline support. Bump the version if you change the app and want it to refresh right away.
-const CACHE = "roses-v4";
+// Offline support: always try for the newest files first, use the saved copy only when offline.
+const CACHE = "roses-v5";
 const SHELL = [
   "./", "index.html", "style.css", "app.js", "bouquet3d.js", "vendor/three.js", "manifest.json", "notes.json",
   "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
@@ -18,36 +18,30 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  const sameSite = url.origin === self.location.origin;
+  // the big 3D engine and fonts rarely change: saved copy first
+  const cacheFirst = !sameSite || url.pathname.endsWith("/vendor/three.js");
 
-  // Notes: always try for the newest, fall back to the last copy when offline.
-  if (url.pathname.endsWith("/notes.json")) {
+  if (cacheFirst) {
     e.respondWith(
-      fetch(e.request, { cache: "no-store" })
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put("notes.json", copy));
-          return res;
-        })
-        .catch(() => caches.match("notes.json"))
+      caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+        if (res && (res.ok || res.type === "opaque")) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
+        return res;
+      }))
     );
     return;
   }
 
-  // Everything else: serve the cached copy fast, refresh it in the background.
+  // the app itself and your notes: newest first
+  const key = url.pathname.endsWith("/notes.json") ? "notes.json" : e.request;
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then((cached) => {
-      const fresh = fetch(e.request)
-        .then((res) => {
-          if (res && (res.ok || res.type === "opaque")) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || fresh;
-    })
+    fetch(e.request, { cache: "no-store" })
+      .then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(key, copy)); }
+        return res;
+      })
+      .catch(() => caches.match(key, { ignoreSearch: true }))
   );
 });

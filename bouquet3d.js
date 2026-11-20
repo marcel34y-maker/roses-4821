@@ -13,9 +13,12 @@ export const ROSE_COLORS = {
   red:   { petal: "#a50d26", sheen: "#ff6f86" },
   pink:  { petal: "#f290b0", sheen: "#ffe0ea" },
   white: { petal: "#fbf4ea", sheen: "#ffffff" },
+  sunflower: { petal: "#f5b301", sheen: "#fff1b8" },
 };
+const SUN_RAYS = 34, SUN_SEEDS = 80;
 
 const PETALS = 24;
+const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
 /* ---------- geometry ---------- */
@@ -135,6 +138,9 @@ const SHARED = {
   floatPetal: petalGeometry(0.85),
   heart: heartGeometry(),
   bud: new THREE.SphereGeometry(1, 8, 6),
+  ray: leafGeometry(0.62, 0.12, 0.05, 0.06),
+  disk: new THREE.SphereGeometry(1, 28, 14),
+  seed: new THREE.IcosahedronGeometry(1, 0),
 };
 
 /* ---------- the scene ---------- */
@@ -236,7 +242,7 @@ export class Bouquet3D {
         .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI * 2));
       return {
         color: ro.color, pos, axis, q,
-        scale: lerp(0.47, 0.55, r()),
+        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : 1),
         phase: r() * Math.PI * 2,
         delay: animate ? 0.25 + k * 0.07 + r() * 0.15 : -10,
         pop: 0, popT: -10,
@@ -265,6 +271,25 @@ export class Bouquet3D {
     this.sepals.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.sepals.frustumCulled = false;
     g.add(this.sepals);
+
+    /* sunflowers (only built when the bouquet has some) */
+    this.sun = null;
+    if (this.roses.some((ro) => ro.color === "sunflower")) {
+      const rays = new THREE.InstancedMesh(SHARED.ray, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide }), n * SUN_RAYS);
+      const disk = new THREE.InstancedMesh(SHARED.disk, new THREE.MeshStandardMaterial({ color: "#3a2210", roughness: 0.95 }), n);
+      const calyx = new THREE.InstancedMesh(SHARED.disk, new THREE.MeshStandardMaterial({ color: "#3f6b3a", roughness: 0.8 }), n);
+      const seeds = new THREE.InstancedMesh(SHARED.seed, new THREE.MeshStandardMaterial({ roughness: 0.9 }), n * SUN_SEEDS);
+      [rays, disk, calyx, seeds].forEach((mesh) => { mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; g.add(mesh); });
+      const yellows = ["#f7b500", "#f5a800", "#ffc21a", "#f29c00"];
+      for (let k = 0; k < n; k++) {
+        for (let i = 0; i < SUN_RAYS; i++) rays.setColorAt(k * SUN_RAYS + i, tint.set(yellows[(i * 3 + k) % yellows.length]).multiplyScalar(i % 2 ? 0.92 : 1));
+        for (let j = 0; j < SUN_SEEDS; j++) {
+          const f = j / SUN_SEEDS;
+          seeds.setColorAt(k * SUN_SEEDS + j, tint.set(f < 0.15 ? "#6b5a1e" : j % 3 ? "#2a1608" : "#5b3a18"));
+        }
+      }
+      this.sun = { rays, disk, calyx, seeds, tilts: Array.from({ length: SUN_RAYS }, () => lerp(-0.12, 0.12, r())) };
+    }
 
     /* stems, merged into one mesh */
     const stems = this.roses.map((ro) => {
@@ -404,8 +429,11 @@ export class Bouquet3D {
       pos.copy(ro.pos).addScaledVector(ro.axis, pop * 0.35);
       const s = ro.scale * grow * (1 + pop * 0.18);
       head.compose(pos, tmpQ, scl.set(s, s, s));
+      const isSun = ro.color === "sunflower";
 
+      if (this.sun) this.updateSunflower(k, isSun ? head : null, open, pop);
       for (let i = 0; i < PETALS; i++) {
+        if (isSun) { this.petalMeshes[i].setMatrixAt(k, ZERO); continue; }
         const ti = i / (PETALS - 1);
         const closed = -(0.25 + 0.9 * ti) * (1 - open);       // bud -> open
         const extra = pop * 0.45 * ti;                         // tap: petals relax open
@@ -426,6 +454,47 @@ export class Bouquet3D {
     });
     this.petalMeshes.forEach((mesh) => (mesh.instanceMatrix.needsUpdate = true));
     this.sepals.instanceMatrix.needsUpdate = true;
+    if (this.sun) ["rays", "disk", "calyx", "seeds"].forEach((key) => (this.sun[key].instanceMatrix.needsUpdate = true));
+  }
+
+  // head = this sunflower's matrix, or null to hide sunflower parts on a rose
+  updateSunflower(k, head, open, pop) {
+    const { rays, disk, calyx, seeds, tilts } = this.sun;
+    if (!head) {
+      for (let i = 0; i < SUN_RAYS; i++) rays.setMatrixAt(k * SUN_RAYS + i, ZERO);
+      for (let j = 0; j < SUN_SEEDS; j++) seeds.setMatrixAt(k * SUN_SEEDS + j, ZERO);
+      disk.setMatrixAt(k, ZERO); calyx.setMatrixAt(k, ZERO);
+      return;
+    }
+    const m = new THREE.Matrix4(), p = new THREE.Matrix4(), ry = new THREE.Matrix4(), rx = new THREE.Matrix4(), tr = new THREE.Matrix4();
+    // petals: two rings that unfold from upright to flat
+    for (let i = 0; i < SUN_RAYS; i++) {
+      const inner = i % 2 === 1;
+      const a = (i / SUN_RAYS) * Math.PI * 2;
+      const flat = inner ? 1.25 : 1.42;
+      const tilt = lerp(0.15, flat, open) + tilts[i] - pop * 0.25;
+      ry.makeRotationY(a);
+      tr.makeTranslation(0, inner ? 0.1 : 0.07, inner ? 0.3 : 0.33);
+      rx.makeRotationX(tilt);
+      p.multiplyMatrices(ry, tr).multiply(rx);
+      if (inner) p.scale(new THREE.Vector3(0.95, 0.88, 0.95));
+      m.multiplyMatrices(head, p);
+      rays.setMatrixAt(k * SUN_RAYS + i, m);
+    }
+    // center disk, green back, and spiral seeds
+    p.compose(new THREE.Vector3(0, 0.1, 0), new THREE.Quaternion(), new THREE.Vector3(0.4, 0.12, 0.4));
+    disk.setMatrixAt(k, m.multiplyMatrices(head, p));
+    p.compose(new THREE.Vector3(0, 0.02, 0), new THREE.Quaternion(), new THREE.Vector3(0.38, 0.14, 0.38));
+    calyx.setMatrixAt(k, m.multiplyMatrices(head, p));
+    const q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (let j = 0; j < SUN_SEEDS; j++) {
+      const rr = 0.36 * Math.sqrt((j + 0.5) / SUN_SEEDS);
+      const ang = j * GOLDEN;
+      const h = 0.1 + 0.12 * Math.sqrt(Math.max(0, 1 - (rr / 0.4) ** 2));
+      const size = 0.028 + 0.012 * (rr / 0.36);
+      p.compose(v.set(Math.cos(ang) * rr, h, Math.sin(ang) * rr), q, sc.set(size, size * 0.7, size));
+      seeds.setMatrixAt(k * SUN_SEEDS + j, m.multiplyMatrices(head, p));
+    }
   }
 
   tap(e) {
@@ -433,9 +502,12 @@ export class Bouquet3D {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.intersectObjects(this.petalMeshes, false)[0];
+    const targets = [...this.petalMeshes];
+    if (this.sun) targets.push(this.sun.rays, this.sun.disk);
+    const hit = this.raycaster.intersectObjects(targets, false)[0];
     if (!hit || hit.instanceId == null) return;
-    const ro = this.roses[hit.instanceId];
+    const id = this.sun && hit.object === this.sun.rays ? Math.floor(hit.instanceId / SUN_RAYS) : hit.instanceId;
+    const ro = this.roses[id];
     ro.popT = this.clock.getElapsedTime();
     this.onInteract?.();
     if (navigator.vibrate) navigator.vibrate(12);

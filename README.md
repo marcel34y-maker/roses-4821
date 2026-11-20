@@ -56,6 +56,18 @@ Everything goes in `notes.json`. You can edit it from your phone on github.com (
 - Watch your commas and quotes. If the JSON breaks, the notes stop showing. Paste it into jsonlint.com if you're unsure.
 - GitHub Pages can take a few minutes to update after you save.
 
+## Special bouquets (sunflowers!)
+
+Roses are the everyday flower. To pick a specific bouquet for a day, add it under `"bouquets"` in `notes.json`:
+
+```json
+"bouquets": {
+  "2026-11-20": "Sunflowers"
+}
+```
+
+Options: `Sunflowers`, `Sunshine` (sunflowers + white roses), `Sunset` (sunflowers + red roses), or any rose mix: `Classic Red`, `Blush`, `Ivory`, `Red & Ivory`, `Blush & Ivory`, `Red & Blush`, `All Three`, `Garden Party`, `Be Mine`, `First Snow`, `Cotton Candy`.
+
 ## Previewing a day
 
 Add `?day=YYYY-MM-DD` to the link to see any day's bouquet, like `.../?day=2026-12-25`. It's handy for checking what she'll get.

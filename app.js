@@ -56,6 +56,13 @@ const STYLES = [
   { name: "First Snow",    mix: { white: 0.75, red: 0.25 } },
   { name: "Cotton Candy",  mix: { pink: 0.7, white: 0.3 } },
 ];
+// Special bouquets that only show up when you ask for them in notes.json ("bouquets")
+const SPECIAL_STYLES = [
+  { name: "Sunflowers", mix: { sunflower: 1 }, count: [13, 16] },
+  { name: "Sunshine",   mix: { sunflower: 0.6, white: 0.4 } },
+  { name: "Sunset",     mix: { sunflower: 0.5, red: 0.5 } },
+];
+
 const WRAPS = [
   { front: "#dcb68c", back: "#c49a6c" },  // kraft
   { front: "#f6d3d7", back: "#e7b6bd" },  // blush
@@ -91,11 +98,14 @@ function styleIndexFor(dateKey) {
 function planFor(dateKey) {
   const r = rng("roses:" + dateKey);
   r();                                              // keep the random sequence the same as before
-  const style = STYLES[styleIndexFor(dateKey)];
+  let style = STYLES[styleIndexFor(dateKey)];
+  const asked = NOTES.bouquets && NOTES.bouquets[dateKey];
+  if (asked) style = [...STYLES, ...SPECIAL_STYLES].find((x) => x.name.toLowerCase() === String(asked).toLowerCase()) || style;
   const wrap = r.pick(WRAPS);
   let ribbon = r.pick(RIBBONS);
   if (wrap === WRAPS[2] && ribbon === "#fffaf2") ribbon = "#b3122b";
-  const count = 19 + Math.floor(r() * 7);           // 19–25 roses
+  const [lo, hi] = style.count || [19, 25];         // 19–25 roses by default
+  const count = lo + Math.floor(r() * (hi - lo + 1));
   const roses = Array.from({ length: count }, () => ({ color: chooseColor(style.mix, r) }));
   return { name: style.name, wrap, ribbon, roses, filler: r() < 0.6, r };
 }
@@ -158,7 +168,8 @@ function showDay(key, animate) {
   getScene().build(plan, plan.r, animate);
 
   const label = $("bouquet-name");
-  label.textContent = `${plan.name} · ${plan.roses.length} roses`;
+  const kinds = plan.roses.every((x) => x.color === "sunflower") ? "sunflowers" : plan.roses.some((x) => x.color === "sunflower") ? "flowers" : "roses";
+  label.textContent = `${plan.name} · ${plan.roses.length} ${kinds}`;
   label.hidden = false;
   $("hint").hidden = false;
   if (storage.get("hint-seen")) $("hint").classList.add("gone");
