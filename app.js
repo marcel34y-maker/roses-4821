@@ -61,6 +61,7 @@ const SPECIAL_STYLES = [
   { name: "Sunflowers", mix: { sunflower: 1 }, count: [13, 16] },
   { name: "Sunshine",   mix: { sunflower: 0.6, white: 0.4 } },
   { name: "Sunset",     mix: { sunflower: 0.5, red: 0.5 } },
+  { name: "Roses in a Vase", mix: { red: 0.34, pink: 0.36, white: 0.3 }, count: [18, 21], vase: true },
   { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 

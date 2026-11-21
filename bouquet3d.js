@@ -346,7 +346,7 @@ export class Bouquet3D {
         .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI * 2));
       return {
         color: ro.color, pos, axis, q,
-        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : ro.color === "lily" ? 1.75 : 1),
+        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : ro.color === "lily" ? 1.75 : (plan.vase && !plan.roses.some((x) => x.color === "lily") ? 1.18 : 1)),
         tint: lerp(0, 1, r()),
         phase: r() * Math.PI * 2,
         delay: animate ? 0.25 + k * 0.07 + r() * 0.15 : -10,
