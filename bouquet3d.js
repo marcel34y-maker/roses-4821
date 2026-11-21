@@ -15,8 +15,21 @@ export const ROSE_COLORS = {
   white: { petal: "#fbf4ea", sheen: "#ffffff" },
   sunflower: { petal: "#f5b301", sheen: "#fff1b8" },
   lily: { petal: "#f6b3c9", sheen: "#ffffff" },
+  peach:    { petal: "#f7ae86", sheen: "#ffe4d4" },
+  lavender: { petal: "#c3a1dc", sheen: "#f1e6ff" },
+  coral:    { petal: "#ef7a66", sheen: "#ffd6cc" },
+  yellow:   { petal: "#f6d25e", sheen: "#fff4c8" },
+  gardenia: { petal: "#fbf5e4", sheen: "#ffffff" },
 };
-const isRose = (c) => c === "red" || c === "pink" || c === "white";
+const NOT_ROSES = ["sunflower", "lily", "gardenia"];
+const isRose = (c) => !NOT_ROSES.includes(c);
+const GARDENIA_RINGS = [
+  { n: 6, tilt: 1.4,  s: 1.0,  off: 0 },
+  { n: 6, tilt: 1.08, s: 0.86, off: 30 },
+  { n: 5, tilt: 0.66, s: 0.64, off: 12 },
+  { n: 3, tilt: 0.28, s: 0.44, off: 50 },
+];
+const GARDENIA_PETALS = GARDENIA_RINGS.reduce((a, r) => a + r.n, 0);
 const SUN_RAYS = 34, SUN_SEEDS = 80;
 
 const PETALS = 24;
@@ -204,6 +217,37 @@ function budGeometry() {
   return g;
 }
 
+// Gardenia petal: broad, rounded, waxy, with a little pinwheel twist.
+function gardeniaPetalGeometry() {
+  const L = 0.62, W = 0.3, cols = 9, rows = 12, pos = [], col = [], idx = [];
+  for (let r = 0; r < rows; r++) {
+    const v = r / (rows - 1);
+    for (let c = 0; c < cols; c++) {
+      const u = (c / (cols - 1)) * 2 - 1;
+      const vv = v * (1 - 0.28 * u * u);
+      const w = W * Math.sin(Math.PI * (0.12 + 0.72 * vv));
+      const x = u * w, y = vv * L;
+      let z = -u * u * w * 0.28;                       // gently cupped
+      z += u * w * vv * 0.35;                          // pinwheel twist
+      z += 0.5 * Math.pow(Math.max(0, vv - 0.6), 2);   // tip relaxes back
+      pos.push(x, y, z);
+      const cream = clamp01(1 - vv / 0.35);
+      col.push(1, 0.985 - 0.04 * cream, 0.95 - 0.16 * cream);
+    }
+  }
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
+      idx.push(a, d, b, b, d, e);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 // Silver-dollar eucalyptus: a round, slightly cupped leaf.
 function roundLeafGeometry() {
   const g = leafGeometry(0.42, 0.24, 0.05, 0.05);
@@ -239,6 +283,8 @@ const SHARED = {
   lilyBud: budGeometry(),
   dollar: roundLeafGeometry(),
   willow: leafGeometry(1.25, 0.12, 0.05, 0.3),
+  gardeniaPetal: gardeniaPetalGeometry(),
+  glossy: leafGeometry(0.85, 0.3, 0.14, 0.1),
 };
 
 /* ---------- the scene ---------- */
@@ -338,7 +384,7 @@ export class Bouquet3D {
       const ring = Math.sqrt(1 - z * z);
       const phi = startPhi + k * GOLDEN;
       const dir = new THREE.Vector3(ring * Math.cos(phi), z, ring * Math.sin(phi));
-      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (ro.color === "lily" ? 0.35 : -0.1) : 0));
+      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (ro.color === "lily" || ro.color === "gardenia" ? 0.35 : -0.1) : 0));
       pos.y = center.y + (pos.y - center.y) * stretchY;
       pos.x += lerp(-0.08, 0.08, r()); pos.z += lerp(-0.08, 0.08, r());
       const axis = pos.clone().sub(conv).normalize().lerp(dir, 0.6).normalize();
@@ -346,7 +392,7 @@ export class Bouquet3D {
         .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI * 2));
       return {
         color: ro.color, pos, axis, q,
-        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : ro.color === "lily" ? 1.75 : (plan.vase && !plan.roses.some((x) => x.color === "lily") ? 1.18 : 1)),
+        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : ro.color === "lily" ? 1.75 : ro.color === "gardenia" ? 1.95 : (plan.vase && !plan.roses.some((x) => x.color === "lily") ? 1.18 : 1)),
         tint: lerp(0, 1, r()),
         phase: r() * Math.PI * 2,
         delay: animate ? 0.25 + k * 0.07 + r() * 0.15 : -10,
@@ -410,6 +456,23 @@ export class Bouquet3D {
         for (let j = 0; j < 3; j++) { outer.setColorAt(k * 3 + j, tint); inner.setColorAt(k * 3 + j, tint); }
       });
       this.lily = { outer, inner, stamens };
+    }
+
+    /* gardenias (only built when the bouquet has some) */
+    this.gard = null;
+    if (this.roses.some((ro) => ro.color === "gardenia")) {
+      const petals = new THREE.InstancedMesh(SHARED.gardeniaPetal, new THREE.MeshPhysicalMaterial({
+        vertexColors: true, side: THREE.DoubleSide, roughness: 0.32, emissive: new THREE.Color("#fff6e8"), emissiveIntensity: 0.14, clearcoat: 0.6, clearcoatRoughness: 0.3, sheen: 0.5, sheenColor: new THREE.Color("#ffffff"),
+      }), n * GARDENIA_PETALS);
+      const leaves = new THREE.InstancedMesh(SHARED.glossy, new THREE.MeshPhysicalMaterial({
+        vertexColors: true, color: "#2c5a33", side: THREE.DoubleSide, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.15,
+      }), n * 3);
+      [petals, leaves].forEach((mesh) => { mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; g.add(mesh); });
+      this.roses.forEach((ro, k) => {
+        tint.setRGB(1, lerp(0.97, 1, ro.tint), lerp(0.9, 0.98, ro.tint));
+        for (let j = 0; j < GARDENIA_PETALS; j++) petals.setColorAt(k * GARDENIA_PETALS + j, tint);
+      });
+      this.gard = { petals, leaves };
     }
 
     /* stems, merged into one mesh */
@@ -691,6 +754,7 @@ export class Bouquet3D {
 
       if (this.sun) this.updateSunflower(k, isSun ? head : null, open, pop);
       if (this.lily) this.updateLily(k, isLily ? head : null, open, pop);
+      if (this.gard) this.updateGardenia(k, ro.color === "gardenia" ? head : null, open, pop);
       for (let i = 0; i < PETALS; i++) {
         if (!isRose(ro.color)) { this.petalMeshes[i].setMatrixAt(k, ZERO); continue; }
         const ti = i / (PETALS - 1);
@@ -708,13 +772,44 @@ export class Bouquet3D {
         p.multiplyMatrices(ry, rx);
         p.setPosition(0, -0.05, 0);
         m.multiplyMatrices(head, p);
-        this.sepals.setMatrixAt(k * 5 + j, isLily ? ZERO : m);
+        this.sepals.setMatrixAt(k * 5 + j, isLily || ro.color === "gardenia" ? ZERO : m);
       }
     });
     this.petalMeshes.forEach((mesh) => (mesh.instanceMatrix.needsUpdate = true));
     this.sepals.instanceMatrix.needsUpdate = true;
     if (this.sun) ["rays", "disk", "calyx", "seeds"].forEach((key) => (this.sun[key].instanceMatrix.needsUpdate = true));
     if (this.lily) ["outer", "inner", "stamens"].forEach((key) => (this.lily[key].instanceMatrix.needsUpdate = true));
+    if (this.gard) ["petals", "leaves"].forEach((key) => (this.gard[key].instanceMatrix.needsUpdate = true));
+  }
+
+  // rings of waxy petals spiraling open, with three glossy leaves underneath
+  updateGardenia(k, head, open, pop) {
+    const { petals, leaves } = this.gard;
+    if (!head) {
+      for (let j = 0; j < GARDENIA_PETALS; j++) petals.setMatrixAt(k * GARDENIA_PETALS + j, ZERO);
+      for (let j = 0; j < 3; j++) leaves.setMatrixAt(k * 3 + j, ZERO);
+      return;
+    }
+    const m = new THREE.Matrix4(), p = new THREE.Matrix4(), ry = new THREE.Matrix4(), rx = new THREE.Matrix4(), sc = new THREE.Matrix4();
+    let idx = 0;
+    GARDENIA_RINGS.forEach((ring, ri) => {
+      for (let i = 0; i < ring.n; i++, idx++) {
+        const tilt = lerp(0.1, ring.tilt, open) + pop * 0.18 * (ri < 2 ? 1 : 0.5);
+        ry.makeRotationY(THREE.MathUtils.degToRad(ring.off + (i * 360) / ring.n));
+        rx.makeRotationX(tilt);
+        sc.makeScale(ring.s, ring.s, ring.s);
+        p.multiplyMatrices(ry, rx).multiply(sc);
+        p.setPosition(0, 0.02 * ri, 0);
+        petals.setMatrixAt(k * GARDENIA_PETALS + idx, m.multiplyMatrices(head, p));
+      }
+    });
+    for (let j = 0; j < 3; j++) {
+      ry.makeRotationY((j / 3) * Math.PI * 2 + 0.5);
+      rx.makeRotationX(1.95);
+      p.multiplyMatrices(ry, rx).multiply(sc.makeScale(0.75, 0.75, 0.75));
+      p.setPosition(0, -0.06, 0);
+      leaves.setMatrixAt(k * 3 + j, m.multiplyMatrices(head, p));
+    }
   }
 
   // six petals that open from a closed trumpet into a star, tips curling back
@@ -789,11 +884,13 @@ export class Bouquet3D {
     const targets = [...this.petalMeshes];
     if (this.sun) targets.push(this.sun.rays, this.sun.disk);
     if (this.lily) targets.push(this.lily.outer, this.lily.inner);
+    if (this.gard) targets.push(this.gard.petals);
     const hit = this.raycaster.intersectObjects(targets, false)[0];
     if (!hit || hit.instanceId == null) return;
     let id = hit.instanceId;
     if (this.sun && hit.object === this.sun.rays) id = Math.floor(id / SUN_RAYS);
     if (this.lily && (hit.object === this.lily.outer || hit.object === this.lily.inner)) id = Math.floor(id / 3);
+    if (this.gard && hit.object === this.gard.petals) id = Math.floor(id / GARDENIA_PETALS);
     const ro = this.roses[id];
     ro.popT = this.clock.getElapsedTime();
     this.onInteract?.();

@@ -66,7 +66,7 @@ Roses are the everyday flower. To pick a specific bouquet for a day, add it unde
 }
 ```
 
-Options: `Roses in a Vase` (pink, white and red roses with eucalyptus in a glass vase), `Lilies & Roses` (pink lilies, roses and eucalyptus in a glass vase), `Sunflowers`, `Sunshine` (sunflowers + white roses), `Sunset` (sunflowers + red roses), or any rose mix: `Classic Red`, `Blush`, `Ivory`, `Red & Ivory`, `Blush & Ivory`, `Red & Blush`, `All Three`, `Garden Party`, `Be Mine`, `First Snow`, `Cotton Candy`.
+Options: `Sorbet & Gardenias` (gardenias with peach, lavender, coral and yellow roses in a glass vase), `Roses in a Vase` (pink, white and red roses with eucalyptus in a glass vase), `Lilies & Roses` (pink lilies, roses and eucalyptus in a glass vase), `Sunflowers`, `Sunshine` (sunflowers + white roses), `Sunset` (sunflowers + red roses), or any rose mix: `Classic Red`, `Blush`, `Ivory`, `Red & Ivory`, `Blush & Ivory`, `Red & Blush`, `All Three`, `Garden Party`, `Be Mine`, `First Snow`, `Cotton Candy`.
 
 ## Previewing a day
 
