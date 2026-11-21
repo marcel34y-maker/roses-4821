@@ -284,6 +284,8 @@ const SHARED = {
   dollar: roundLeafGeometry(),
   willow: leafGeometry(1.25, 0.12, 0.05, 0.3),
   gardeniaPetal: gardeniaPetalGeometry(),
+  drop: new THREE.SphereGeometry(1, 10, 8),
+  spark: new THREE.OctahedronGeometry(1, 0),
   glossy: leafGeometry(0.85, 0.3, 0.14, 0.1),
 };
 
@@ -330,6 +332,8 @@ export class Bouquet3D {
 
     this.raycaster = new THREE.Raycaster();
     this.effects = [];
+    this.pick = null;
+    this.released = [];
     this.clock = { last: performance.now(), getElapsedTime: () => performance.now() / 1000, getDelta() { const n = performance.now(); const d = (n - this.last) / 1000; this.last = n; return d; } };
     this.group = null;
 
@@ -366,6 +370,8 @@ export class Bouquet3D {
     this.scene.add(g);
     this.start = this.clock.getElapsedTime();
     this.animate = animate;
+    this.pick = null;
+    this.released = [];
 
     /* rose head placement on a dome */
     const n = plan.roses.length;
@@ -737,6 +743,19 @@ export class Bouquet3D {
     const swayAxis = new THREE.Vector3(1, 0, 0);
     const now = this.clock.getElapsedTime();
 
+    // where a picked-up flower floats to: just in front of the camera, in bouquet space
+    const picking = this.pick || this.released.length;
+    let target, camLocal;
+    if (picking) {
+      this.group.updateMatrixWorld();
+      const fwd = new THREE.Vector3();
+      this.camera.getWorldDirection(fwd);
+      const dist = this.camera.position.distanceTo(this.controls.target);
+      target = this.group.worldToLocal(this.camera.position.clone().addScaledVector(fwd, dist * 0.68));
+      camLocal = this.group.worldToLocal(this.camera.position.clone());
+    }
+    const faceQ = new THREE.Quaternion(), spinQ = new THREE.Quaternion(), upY = new THREE.Vector3(0, 1, 0);
+
     this.roses.forEach((ro, k) => {
       const b = clamp01((t - ro.delay) / 1.3);              // bloom progress 0..1
       const grow = b <= 0 ? 0.0001 : easeOutBack(clamp01(b * 1.4));
@@ -747,7 +766,15 @@ export class Bouquet3D {
       sway.setFromAxisAngle(swayAxis, Math.sin(now * 1.2 + ro.phase) * 0.035 + pop * 0.15);
       tmpQ.copy(ro.q).multiply(sway);
       pos.copy(ro.pos).addScaledVector(ro.axis, pop * 0.35);
-      const s = ro.scale * grow * (1 + pop * 0.18);
+      let s = ro.scale * grow * (1 + pop * 0.18);
+      const pb = picking ? this.pickBlend(k, now) : 0;
+      if (pb > 0) {
+        const facing = camLocal.clone().sub(target).normalize();
+        faceQ.setFromUnitVectors(upY, facing).multiply(spinQ.setFromAxisAngle(upY, now * 0.7));
+        pos.lerp(target, pb);
+        tmpQ.slerp(faceQ, pb);
+        s *= 1 + 0.3 * pb;
+      }
       head.compose(pos, tmpQ, scl.set(s, s, s));
       const isSun = ro.color === "sunflower";
       const isLily = ro.color === "lily";
@@ -886,26 +913,108 @@ export class Bouquet3D {
     if (this.lily) targets.push(this.lily.outer, this.lily.inner);
     if (this.gard) targets.push(this.gard.petals);
     const hit = this.raycaster.intersectObjects(targets, false)[0];
-    if (!hit || hit.instanceId == null) return;
+    if (!hit || hit.instanceId == null) { if (this.pick) this.putBack(); return; }
     let id = hit.instanceId;
     if (this.sun && hit.object === this.sun.rays) id = Math.floor(id / SUN_RAYS);
     if (this.lily && (hit.object === this.lily.outer || hit.object === this.lily.inner)) id = Math.floor(id / 3);
     if (this.gard && hit.object === this.gard.petals) id = Math.floor(id / GARDENIA_PETALS);
-    const ro = this.roses[id];
-    ro.popT = this.clock.getElapsedTime();
     this.onInteract?.();
-    if (navigator.vibrate) navigator.vibrate(12);
-
-    const world = ro.pos.clone().addScaledVector(ro.axis, 0.5).applyMatrix4(this.group.matrixWorld);
-    const color = ROSE_COLORS[ro.color].petal;
-    for (let i = 0; i < 14; i++) this.spawn("petal", world, color);
-    for (let i = 0; i < 3; i++) this.spawn("heart", world, i === 1 ? "#ff7a99" : "#e0294a");
+    if (this.pick && this.pick.k === id) { this.putBack(); return; }
+    this.pickUp(id);
   }
 
-  spawn(kind, at, color) {
+  /* ----- picking a flower up to look at it ----- */
+  pickBlend(k, now) {
+    if (this.pick && this.pick.k === k) return easeOutCubic(clamp01((now - this.pick.t) / 0.7));
+    const r = this.released.find((x) => x.k === k);
+    if (!r) return 0;
+    const b = r.from * (1 - easeOutCubic(clamp01((now - r.t) / 0.6)));
+    if (b <= 0) this.released = this.released.filter((x) => x !== r);
+    return b;
+  }
+
+  pickUp(k) {
+    const now = this.clock.getElapsedTime();
+    if (this.pick) this.putBack();
+    this.released = this.released.filter((x) => x.k !== k);
+    this.pick = { k, t: now };
+    this.controls.autoRotate = false;
+    const ro = this.roses[k];
+    ro.popT = now;
+    if (navigator.vibrate) navigator.vibrate(12);
+    const world = ro.pos.clone().addScaledVector(ro.axis, 0.5).applyMatrix4(this.group.matrixWorld);
+    const color = ROSE_COLORS[ro.color].petal;
+    for (let i = 0; i < 12; i++) this.spawn("petal", world, color);
+    for (let i = 0; i < 3; i++) this.spawn("heart", world, i === 1 ? "#ff7a99" : "#e0294a");
+    this.onPick?.(ro.color);
+  }
+
+  putBack() {
+    if (!this.pick) return;
+    const now = this.clock.getElapsedTime();
+    this.released.push({ k: this.pick.k, t: now, from: this.pickBlend(this.pick.k, now) });
+    this.pick = null;
+    this.onPutBack?.();
+  }
+
+  /* ----- water the flowers: rain, then every flower perks up and sparkles ----- */
+  water() {
+    if (!this.group || this.watering) return;
+    this.watering = true;
+    this.onInteract?.();
+    this.group.updateMatrixWorld();
+    const top = new THREE.Vector3(0, 3.6, 0).applyMatrix4(this.group.matrixWorld);
+    for (let i = 0; i < 70; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 2.1;
+      const at = top.clone().add(new THREE.Vector3(Math.cos(a) * r, Math.random() * 1.6, Math.sin(a) * r));
+      this.spawn("drop", at, "#9fd3f0", Math.random() * 0.5);
+    }
+    setTimeout(() => {
+      const now = this.clock.getElapsedTime();
+      this.roses.forEach((ro, k) => {
+        ro.popT = now + k * 0.05;
+        if (k === this.pick?.k) return;
+        const world = ro.pos.clone().addScaledVector(ro.axis, 0.45).applyMatrix4(this.group.matrixWorld);
+        for (let i = 0; i < 3; i++) this.spawn("spark", world.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.7)), i % 2 ? "#fff6c8" : "#ffffff", k * 0.05 + Math.random() * 0.3);
+        if (k % 3 === 0) for (let i = 0; i < 3; i++) this.spawn("petal", world, ROSE_COLORS[ro.color].petal, k * 0.05);
+      });
+      if (navigator.vibrate) navigator.vibrate([10, 40, 10]);
+      this.watering = false;
+    }, 900);
+  }
+
+  /* ----- send love: hearts float up out of the whole bouquet ----- */
+  love() {
+    if (!this.group) return;
+    this.onInteract?.();
+    this.group.updateMatrixWorld();
+    const colors = ["#e0294a", "#ff7a99", "#ff4f7b", "#ffb3c6"];
+    for (let i = 0; i < 22; i++) {
+      const ro = this.roses[Math.floor(Math.random() * this.roses.length)];
+      const world = ro.pos.clone().addScaledVector(ro.axis, 0.4).applyMatrix4(this.group.matrixWorld);
+      this.spawn("heart", world, colors[i % colors.length], Math.random() * 1.2);
+    }
+    if (navigator.vibrate) navigator.vibrate(20);
+  }
+
+  spawn(kind, at, color, delay = 0) {
+    if (kind === "drop" || kind === "spark") {
+      const mat = kind === "drop"
+        ? new THREE.MeshPhysicalMaterial({ color, roughness: 0.05, transparent: true, opacity: 0.8, clearcoat: 1 })
+        : new THREE.MeshBasicMaterial({ color, transparent: true });
+      const mesh = new THREE.Mesh(kind === "drop" ? SHARED.drop : SHARED.spark, mat);
+      mesh.position.copy(at);
+      mesh.visible = false;
+      const size = kind === "drop" ? lerp(0.035, 0.05, Math.random()) : lerp(0.05, 0.09, Math.random());
+      if (kind === "drop") mesh.scale.set(size, size * 1.8, size);
+      this.scene.add(mesh);
+      this.effects.push({ kind, mesh, size, vel: new THREE.Vector3(0, -lerp(3, 4.5, Math.random()), 0), born: this.clock.getElapsedTime() + delay, life: kind === "drop" ? 1.1 : 1.0, spin: new THREE.Vector3(0, 4, 0) });
+      return;
+    }
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, side: THREE.DoubleSide, transparent: true });
     const mesh = new THREE.Mesh(kind === "heart" ? SHARED.heart : SHARED.floatPetal, mat);
     mesh.position.copy(at);
+    mesh.visible = delay <= 0;
     const size = kind === "heart" ? lerp(0.34, 0.46, Math.random()) : lerp(0.24, 0.34, Math.random());
     mesh.scale.setScalar(size);
     mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
@@ -914,7 +1023,7 @@ export class Bouquet3D {
       ? new THREE.Vector3(Math.cos(a) * 0.4, lerp(1.1, 1.6, Math.random()), Math.sin(a) * 0.4 + 0.3)
       : new THREE.Vector3(Math.cos(a) * lerp(0.8, 1.8, Math.random()), lerp(1.2, 2.4, Math.random()), Math.sin(a) * lerp(0.8, 1.8, Math.random()));
     this.scene.add(mesh);
-    this.effects.push({ kind, mesh, vel, size, born: this.clock.getElapsedTime(), life: kind === "heart" ? 2.2 : 3.2, spin: new THREE.Vector3(Math.random() * 3, Math.random() * 3, Math.random() * 3) });
+    this.effects.push({ kind, mesh, vel, size, born: this.clock.getElapsedTime() + delay, life: kind === "heart" ? 2.2 : 3.2, spin: new THREE.Vector3(Math.random() * 3, Math.random() * 3, Math.random() * 3) });
   }
 
   frame() {
@@ -931,7 +1040,23 @@ export class Bouquet3D {
     }
     this.effects = this.effects.filter((fx) => {
       const age = now - fx.born;
+      if (age < 0) return true;                       // waiting for its delay
+      fx.mesh.visible = true;
       if (age > fx.life) { this.scene.remove(fx.mesh); fx.mesh.material.dispose(); return false; }
+      if (fx.kind === "drop") {
+        fx.vel.y -= 6 * dt;
+        fx.mesh.position.addScaledVector(fx.vel, dt);
+        fx.mesh.material.opacity = 0.8 * (1 - Math.pow(age / fx.life, 4));
+        return true;
+      }
+      if (fx.kind === "spark") {
+        const tw = Math.sin((age / fx.life) * Math.PI);
+        fx.mesh.scale.setScalar(fx.size * tw * (1 + 0.3 * Math.sin(age * 30)));
+        fx.mesh.rotation.y += 5 * dt;
+        fx.mesh.position.y += 0.25 * dt;
+        fx.mesh.material.opacity = tw;
+        return true;
+      }
       if (fx.kind === "heart") {
         fx.mesh.position.addScaledVector(fx.vel, dt);
         fx.mesh.position.x += Math.sin(age * 4 + fx.born) * 0.006;

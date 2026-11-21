@@ -4,7 +4,10 @@ A little app for her phone. Every day she gets a new **3D bouquet** of pink, whi
 
 - She taps a sealed envelope and the roses bloom open one by one.
 - **Drag** to spin the bouquet all the way around, **pinch** to zoom in.
-- **Tap any rose** and it lifts up, opens a little more, and sends out petals and hearts (and a tiny buzz on Android).
+- **Tap a flower to pick it up.** It floats out of the bouquet toward her, slowly turning, and a little message from you pops up. Tap again (or anywhere else) to put it back.
+- **💧 Water:** rain falls on the bouquet, then every flower perks up, sparkles and drops a few petals.
+- **💗 Love:** hearts float up out of the whole bouquet.
+- A counter shows which bouquet number it is.
 - Every day is different: 11 color mixes, 19–25 roses, 5 wrapping papers, 4 ribbons, sometimes baby's breath, all arranged differently. It changes at 8:00 am her time (set `newDayHour` in `app.js`).
 - The dots at the bottom let her look back at the last 7 days.
 - It works offline once it's installed.
@@ -55,6 +58,10 @@ Everything goes in `notes.json`. You can edit it from your phone on github.com (
 - Use `\n` inside a note for a line break.
 - Watch your commas and quotes. If the JSON breaks, the notes stop showing. Paste it into jsonlint.com if you're unsure.
 - GitHub Pages can take a few minutes to update after you save.
+
+## Pick-up messages
+
+The little messages that pop up when she picks a flower live under `"whispers"` in `notes.json`. Add, change or delete any of them.
 
 ## Special bouquets (sunflowers!)
 

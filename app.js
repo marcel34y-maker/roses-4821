@@ -152,12 +152,36 @@ function greeting() {
 function getScene() {
   if (!scene) {
     scene = new Bouquet3D($("bouquet"));
+    scene.onPick = () => whisper();
+    scene.onPutBack = () => $("whisper").classList.remove("show");
     scene.onInteract = () => {
       const hint = $("hint");
-      if (!hint.classList.contains("gone")) { hint.classList.add("gone"); storage.set("hint-seen", "1"); }
+      if (!hint.classList.contains("gone")) { hint.classList.add("gone"); storage.set("hint2-seen", "1"); }
     };
   }
   return scene;
+}
+
+/* little messages that pop up when she picks a flower (add your own in notes.json "whispers") */
+const DEFAULT_WHISPERS = [
+  "I love you", "You're my favorite person", "Thinking of you", "You make me so happy",
+  "Can't wait to see you", "You're beautiful", "Lucky me", "Always yours",
+];
+let whisperTimer, lastWhisper = -1;
+function whisper() {
+  const list = (NOTES.whispers && NOTES.whispers.length ? NOTES.whispers : DEFAULT_WHISPERS);
+  let i = Math.floor(Math.random() * list.length);
+  if (list.length > 1 && i === lastWhisper) i = (i + 1) % list.length;
+  lastWhisper = i;
+  const el = $("whisper");
+  el.textContent = `${list[i]} ♡`;
+  el.classList.add("show");
+  clearTimeout(whisperTimer);
+  whisperTimer = setTimeout(() => el.classList.remove("show"), 3200);
+}
+
+function bouquetNumber(key) {
+  return Math.round((parseYmd(key) - parseYmd(CONFIG.firstDay)) / 86400000) + 1;
 }
 
 function showDay(key, animate) {
@@ -173,10 +197,14 @@ function showDay(key, animate) {
   const label = $("bouquet-name");
   const allOf = (c) => plan.roses.every((x) => x.color === c);
   const kinds = allOf("sunflower") ? "sunflowers" : plan.roses.every((x) => !["sunflower", "lily", "gardenia"].includes(x.color)) ? "roses" : "flowers";
-  label.textContent = `${plan.name} · ${plan.roses.length} ${kinds}`;
+  const num = bouquetNumber(key);
+  label.textContent = `${plan.name} · ${plan.roses.length} ${kinds}` + (num > 0 ? ` · bouquet #${num}` : "");
   label.hidden = false;
   $("hint").hidden = false;
-  if (storage.get("hint-seen")) $("hint").classList.add("gone");
+  $("actions").hidden = false;
+  $("actions").style.animation = animate ? "" : "none";
+  $("whisper").classList.remove("show");
+  if (storage.get("hint2-seen")) $("hint").classList.add("gone");
 
   const text = noteFor(key);
   const note = $("note");
@@ -219,12 +247,15 @@ function showGift() {
   selected = todayKey;
   $("greeting").textContent = greeting();
   $("date").textContent = longDate(parseYmd(todayKey));
-  ["bouquet", "bouquet-name", "hint", "note"].forEach((id) => ($(id).hidden = true));
+  ["bouquet", "bouquet-name", "hint", "note", "actions"].forEach((id) => ($(id).hidden = true));
   const gift = $("gift");
   gift.classList.remove("opening");
   gift.hidden = false;
   renderDays();
 }
+
+$("btn-water").addEventListener("click", () => scene && scene.water());
+$("btn-love").addEventListener("click", () => scene && scene.love());
 
 $("gift").addEventListener("click", () => {
   const gift = $("gift");

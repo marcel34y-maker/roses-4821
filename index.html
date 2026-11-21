@@ -43,8 +43,15 @@
         <span class="gift-label">Tap to open today's flowers</span>
       </button>
 
-      <div id="bouquet" hidden></div>
-      <p id="hint" hidden>Drag to turn it · tap a flower</p>
+      <div id="bouquet-wrap">
+        <div id="bouquet" hidden></div>
+        <div id="whisper" aria-live="polite"></div>
+      </div>
+      <div id="actions" hidden>
+        <button type="button" id="btn-water" aria-label="Water the flowers"><span>💧</span>Water</button>
+        <button type="button" id="btn-love" aria-label="Send hearts"><span>💗</span>Love</button>
+      </div>
+      <p id="hint" hidden>Spin it · tap a flower to pick it up</p>
       <p id="bouquet-name" hidden></p>
     </section>
 
