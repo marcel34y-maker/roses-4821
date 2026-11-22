@@ -63,6 +63,7 @@ const SPECIAL_STYLES = [
   { name: "Sunset",     mix: { sunflower: 0.5, red: 0.5 } },
   { name: "Roses in a Vase", mix: { red: 0.34, pink: 0.36, white: 0.3 }, count: [18, 21], vase: true },
   { name: "Sorbet & Gardenias", mix: { gardenia: 0.38, peach: 0.2, lavender: 0.18, coral: 0.14, yellow: 0.1 }, count: [16, 19], vase: true },
+  { name: "Autumn Sunrise", mix: { tigerlily: 0.3, goldlily: 0.17, sunflower: 0.15, red: 0.2, peach: 0.18 }, count: [16, 18], vase: true, buds: 6 },
   { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 
@@ -196,7 +197,7 @@ function showDay(key, animate) {
 
   const label = $("bouquet-name");
   const allOf = (c) => plan.roses.every((x) => x.color === c);
-  const kinds = allOf("sunflower") ? "sunflowers" : plan.roses.every((x) => !["sunflower", "lily", "gardenia"].includes(x.color)) ? "roses" : "flowers";
+  const kinds = allOf("sunflower") ? "sunflowers" : plan.roses.every((x) => !["sunflower", "lily", "tigerlily", "goldlily", "gardenia"].includes(x.color)) ? "roses" : "flowers";
   const num = bouquetNumber(key);
   label.textContent = `${plan.name} · ${plan.roses.length} ${kinds}` + (num > 0 ? ` · bouquet #${num}` : "");
   label.hidden = false;

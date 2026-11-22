@@ -15,13 +15,22 @@ export const ROSE_COLORS = {
   white: { petal: "#fbf4ea", sheen: "#ffffff" },
   sunflower: { petal: "#f5b301", sheen: "#fff1b8" },
   lily: { petal: "#f6b3c9", sheen: "#ffffff" },
+  tigerlily: { petal: "#f27a2e", sheen: "#ffd2b0" },
+  goldlily:  { petal: "#f8cf52", sheen: "#fff3c4" },
   peach:    { petal: "#f7ae86", sheen: "#ffe4d4" },
   lavender: { petal: "#c3a1dc", sheen: "#f1e6ff" },
   coral:    { petal: "#ef7a66", sheen: "#ffd6cc" },
   yellow:   { petal: "#f6d25e", sheen: "#fff4c8" },
   gardenia: { petal: "#fbf5e4", sheen: "#ffffff" },
 };
-const NOT_ROSES = ["sunflower", "lily", "gardenia"];
+// lily varieties: same flower shape, different coloring
+const LILY_TINTS = {
+  lily:      (t, c) => c.setRGB(1, lerp(0.8, 1, t), lerp(0.86, 1, t)),        // pink stargazer
+  tigerlily: (t, c) => c.setRGB(1, lerp(0.36, 0.46, t), lerp(0.03, 0.09, t)),   // orange with dark freckles
+  goldlily:  (t, c) => c.setRGB(1, lerp(0.74, 0.82, t), lerp(0.08, 0.16, t)),   // golden yellow
+};
+const isLilyKind = (c) => c in LILY_TINTS;
+const NOT_ROSES = ["sunflower", "gardenia", ...Object.keys(LILY_TINTS)];
 const isRose = (c) => !NOT_ROSES.includes(c);
 const GARDENIA_RINGS = [
   { n: 6, tilt: 1.4,  s: 1.0,  off: 0 },
@@ -390,7 +399,7 @@ export class Bouquet3D {
       const ring = Math.sqrt(1 - z * z);
       const phi = startPhi + k * GOLDEN;
       const dir = new THREE.Vector3(ring * Math.cos(phi), z, ring * Math.sin(phi));
-      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (ro.color === "lily" || ro.color === "gardenia" ? 0.35 : -0.1) : 0));
+      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (isLilyKind(ro.color) || ro.color === "gardenia" ? 0.35 : -0.1) : 0));
       pos.y = center.y + (pos.y - center.y) * stretchY;
       pos.x += lerp(-0.08, 0.08, r()); pos.z += lerp(-0.08, 0.08, r());
       const axis = pos.clone().sub(conv).normalize().lerp(dir, 0.6).normalize();
@@ -398,7 +407,7 @@ export class Bouquet3D {
         .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI * 2));
       return {
         color: ro.color, pos, axis, q,
-        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : ro.color === "lily" ? 1.75 : ro.color === "gardenia" ? 1.95 : (plan.vase && !plan.roses.some((x) => x.color === "lily") ? 1.18 : 1)),
+        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : isLilyKind(ro.color) ? 1.75 : ro.color === "gardenia" ? 1.95 : (plan.vase && !plan.roses.some((x) => isLilyKind(x.color)) ? 1.18 : 1)),
         tint: lerp(0, 1, r()),
         phase: r() * Math.PI * 2,
         delay: animate ? 0.25 + k * 0.07 + r() * 0.15 : -10,
@@ -450,15 +459,15 @@ export class Bouquet3D {
 
     /* lilies (only built when the bouquet has some) */
     this.lily = null;
-    if (this.roses.some((ro) => ro.color === "lily")) {
-      const lilyMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5, sheen: 0.6, sheenColor: new THREE.Color("#ffffff") });
+    if (this.roses.some((ro) => isLilyKind(ro.color))) {
+      const lilyMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5, sheen: this.roses.some((x) => x.color === "lily") ? 0.6 : 0.15, sheenColor: new THREE.Color("#ffffff") });
       const outer = new THREE.InstancedMesh(SHARED.tepalOuter, lilyMat, n * 3);
       const inner = new THREE.InstancedMesh(SHARED.tepalInner, lilyMat, n * 3);
       const stamens = new THREE.InstancedMesh(SHARED.stamens, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }), n);
       [outer, inner, stamens].forEach((mesh) => { mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; g.add(mesh); });
       this.roses.forEach((ro, k) => {
         // some lilies blush pinker, some stay nearly white
-        tint.setRGB(1, lerp(0.8, 1, ro.tint), lerp(0.86, 1, ro.tint));
+        (LILY_TINTS[ro.color] || LILY_TINTS.lily)(ro.tint, tint);
         for (let j = 0; j < 3; j++) { outer.setColorAt(k * 3 + j, tint); inner.setColorAt(k * 3 + j, tint); }
       });
       this.lily = { outer, inner, stamens };
@@ -777,7 +786,7 @@ export class Bouquet3D {
       }
       head.compose(pos, tmpQ, scl.set(s, s, s));
       const isSun = ro.color === "sunflower";
-      const isLily = ro.color === "lily";
+      const isLily = isLilyKind(ro.color);
 
       if (this.sun) this.updateSunflower(k, isSun ? head : null, open, pop);
       if (this.lily) this.updateLily(k, isLily ? head : null, open, pop);
