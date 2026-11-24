@@ -64,6 +64,7 @@ const SPECIAL_STYLES = [
   { name: "Roses in a Vase", mix: { red: 0.34, pink: 0.36, white: 0.3 }, count: [18, 21], vase: true },
   { name: "Sorbet & Gardenias", mix: { gardenia: 0.38, peach: 0.2, lavender: 0.18, coral: 0.14, yellow: 0.1 }, count: [16, 19], vase: true },
   { name: "Autumn Sunrise", mix: { tigerlily: 0.3, goldlily: 0.17, sunflower: 0.15, red: 0.2, peach: 0.18 }, count: [16, 18], vase: true, buds: 6 },
+  { name: "Sweetheart", mix: { lily: 0.3, gardenia: 0.25, pink: 0.25, red: 0.2 }, count: [16, 18], vase: true, buds: 5 },
   { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 
