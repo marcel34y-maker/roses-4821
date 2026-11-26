@@ -65,6 +65,7 @@ const SPECIAL_STYLES = [
   { name: "Sorbet & Gardenias", mix: { gardenia: 0.38, peach: 0.2, lavender: 0.18, coral: 0.14, yellow: 0.1 }, count: [16, 19], vase: true },
   { name: "Autumn Sunrise", mix: { tigerlily: 0.3, goldlily: 0.17, sunflower: 0.15, red: 0.2, peach: 0.18 }, count: [16, 18], vase: true, buds: 6 },
   { name: "Sweetheart", mix: { lily: 0.3, gardenia: 0.25, pink: 0.25, red: 0.2 }, count: [16, 18], vase: true, buds: 5 },
+  { name: "Harvest", mix: { burgundy: 0.28, orange: 0.26, peach: 0.14, tigerlily: 0.2, goldlily: 0.12 }, count: [17, 19], wrap: 0, ribbon: "#9a3b1b", autumn: true, filler: false },
   { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 
@@ -106,13 +107,17 @@ function planFor(dateKey) {
   let style = STYLES[styleIndexFor(dateKey)];
   const asked = NOTES.bouquets && NOTES.bouquets[dateKey];
   if (asked) style = [...STYLES, ...SPECIAL_STYLES].find((x) => x.name.toLowerCase() === String(asked).toLowerCase()) || style;
-  const wrap = r.pick(WRAPS);
+  let wrap = r.pick(WRAPS);
   let ribbon = r.pick(RIBBONS);
   if (wrap === WRAPS[2] && ribbon === "#fffaf2") ribbon = "#b3122b";
   const [lo, hi] = style.count || [19, 25];         // 19–25 roses by default
   const count = lo + Math.floor(r() * (hi - lo + 1));
   const roses = Array.from({ length: count }, () => ({ color: chooseColor(style.mix, r) }));
-  return { name: style.name, wrap, ribbon, roses, filler: r() < 0.6, vase: !!style.vase, buds: style.buds || 0, r };
+  let filler = r() < 0.6;
+  if (style.wrap != null) wrap = WRAPS[style.wrap];
+  if (style.ribbon) ribbon = style.ribbon;
+  if (style.filler != null) filler = style.filler;
+  return { name: style.name, wrap, ribbon, roses, filler, vase: !!style.vase, buds: style.buds || 0, autumn: !!style.autumn, r };
 }
 
 /* ---------- notes ---------- */

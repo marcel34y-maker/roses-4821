@@ -21,12 +21,14 @@ export const ROSE_COLORS = {
   lavender: { petal: "#c3a1dc", sheen: "#f1e6ff" },
   coral:    { petal: "#ef7a66", sheen: "#ffd6cc" },
   yellow:   { petal: "#f6d25e", sheen: "#fff4c8" },
+  burgundy: { petal: "#4e0614", sheen: "#8a2a3c" },
+  orange:   { petal: "#e8631a", sheen: "#ffb07a" },
   gardenia: { petal: "#fbf5e4", sheen: "#ffffff" },
 };
 // lily varieties: same flower shape, different coloring
 const LILY_TINTS = {
   lily:      (t, c) => c.setRGB(1, lerp(0.8, 1, t), lerp(0.86, 1, t)),        // pink stargazer
-  tigerlily: (t, c) => c.setRGB(1, lerp(0.36, 0.46, t), lerp(0.03, 0.09, t)),   // orange with dark freckles
+  tigerlily: (t, c) => c.setRGB(1, lerp(0.3, 0.4, t), lerp(0.02, 0.06, t)),   // orange with dark freckles
   goldlily:  (t, c) => c.setRGB(1, lerp(0.74, 0.82, t), lerp(0.08, 0.16, t)),   // golden yellow
 };
 const isLilyKind = (c) => c in LILY_TINTS;
@@ -534,7 +536,9 @@ export class Bouquet3D {
     const leafCount = vase ? 0 : 14;
     const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, side: THREE.DoubleSide });
     const leaves = new THREE.InstancedMesh(SHARED.leaf, leafMat, leafCount);
-    const greens = ["#4f8a47", "#5f9a55", "#3f7a3c", "#6aa35e"];
+    const greens = plan.autumn
+      ? ["#c4561c", "#d9822b", "#a8321e", "#e0a132", "#8a3a1a", "#6f7f36", "#b8691f"]   // fall leaves
+      : ["#4f8a47", "#5f9a55", "#3f7a3c", "#6aa35e"];
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
     for (let i = 0; i < leafCount; i++) {
       const phi = (i / leafCount) * Math.PI * 2 + lerp(-0.2, 0.2, r());
@@ -553,7 +557,7 @@ export class Bouquet3D {
     /* greenery mound inside the bouquet so gaps show leaves, not bare stems */
     const mound = new THREE.Mesh(
       new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.62),
-      new THREE.MeshStandardMaterial({ color: "#2f5a2e", roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ color: plan.autumn ? "#3d4522" : "#2f5a2e", roughness: 0.9 })
     );
     mound.scale.set(1.75, 1.45, 1.75);
     mound.position.copy(center).add(new THREE.Vector3(0, -0.15, 0));
