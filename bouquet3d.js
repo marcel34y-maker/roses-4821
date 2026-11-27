@@ -600,7 +600,7 @@ export class Bouquet3D {
       g.add(bb);
     }
 
-    if (vase) { this.addVase(g); this.updateRoses(0); return; }
+    if (vase) { this.addVase(g, plan.vase); this.updateRoses(0); return; }
 
     /* wrapping paper (two layers) */
     const paperMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.92, side: THREE.DoubleSide });
@@ -708,7 +708,8 @@ export class Bouquet3D {
     g.add(berries);
   }
 
-  addVase(g) {
+  addVase(g, type) {
+    if (type === "ceramic") return this.addCeramicVase(g);
     const glass = (opacity, color = "#eef7f6") => new THREE.MeshPhysicalMaterial({
       color, transparent: true, opacity, roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05,
       side: THREE.DoubleSide, depthWrite: false,
@@ -735,6 +736,31 @@ export class Bouquet3D {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = -2.72;
     g.add(shadow);
+  }
+
+  // glossy blush ceramic vase: rounded body, slim neck, flared lip, gold trim
+  addCeramicVase(g) {
+    const profile = [
+      [0.0, -2.75], [0.48, -2.75], [0.52, -2.68], [0.5, -2.6], [0.62, -2.35], [0.86, -2.0], [0.98, -1.6],
+      [0.96, -1.2], [0.84, -0.85], [0.66, -0.5], [0.6, -0.28], [0.64, -0.1], [0.76, 0.02], [0.8, 0.06],
+      [0.74, 0.06], [0.58, -0.08], [0.52, -0.3],
+    ].map(([x, y]) => new THREE.Vector2(x, y));
+    const body = new THREE.Mesh(
+      new THREE.LatheGeometry(profile, 72),
+      new THREE.MeshPhysicalMaterial({ color: "#f2d9d6", roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.08, sheen: 0.4, sheenColor: new THREE.Color("#ffffff"), side: THREE.DoubleSide })
+    );
+    const gold = new THREE.MeshPhysicalMaterial({ color: "#d8b25e", metalness: 0.75, roughness: 0.28, clearcoat: 1, emissive: new THREE.Color("#6b4e14"), emissiveIntensity: 0.35 });
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.775, 0.03, 10, 72), gold);
+    lip.rotation.x = Math.PI / 2; lip.position.y = 0.06;
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.985, 0.022, 10, 72), gold);
+    band.rotation.x = Math.PI / 2; band.position.y = -1.6;
+    const foot = new THREE.Mesh(new THREE.TorusGeometry(0.515, 0.026, 10, 72), gold);
+    foot.rotation.x = Math.PI / 2; foot.position.y = -2.66;
+    const inside = new THREE.Mesh(new THREE.CircleGeometry(0.58, 40), new THREE.MeshBasicMaterial({ color: "#3a2a26" }));
+    inside.rotation.x = -Math.PI / 2; inside.position.y = -0.3;
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.25, 40), new THREE.MeshBasicMaterial({ color: "#7a3a44", transparent: true, opacity: 0.1, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = -2.76;
+    g.add(body, lip, band, foot, inside, shadow);
   }
 
   clear() {

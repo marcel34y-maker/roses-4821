@@ -66,6 +66,7 @@ const SPECIAL_STYLES = [
   { name: "Autumn Sunrise", mix: { tigerlily: 0.3, goldlily: 0.17, sunflower: 0.15, red: 0.2, peach: 0.18 }, count: [16, 18], vase: true, buds: 6 },
   { name: "Sweetheart", mix: { lily: 0.3, gardenia: 0.25, pink: 0.25, red: 0.2 }, count: [16, 18], vase: true, buds: 5 },
   { name: "Harvest", mix: { burgundy: 0.28, orange: 0.26, peach: 0.14, tigerlily: 0.2, goldlily: 0.12 }, count: [17, 19], wrap: 0, ribbon: "#9a3b1b", autumn: true, filler: false },
+  { name: "Velvet", mix: { red: 0.4, burgundy: 0.28, lily: 0.2, gardenia: 0.12 }, count: [17, 19], vase: "ceramic", buds: 4 },
   { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 
@@ -117,7 +118,7 @@ function planFor(dateKey) {
   if (style.wrap != null) wrap = WRAPS[style.wrap];
   if (style.ribbon) ribbon = style.ribbon;
   if (style.filler != null) filler = style.filler;
-  return { name: style.name, wrap, ribbon, roses, filler, vase: !!style.vase, buds: style.buds || 0, autumn: !!style.autumn, r };
+  return { name: style.name, wrap, ribbon, roses, filler, vase: style.vase || false, buds: style.buds || 0, autumn: !!style.autumn, r };
 }
 
 /* ---------- notes ---------- */
