@@ -61,6 +61,19 @@
     </article>
 
     <nav id="days" aria-label="Past bouquets"></nav>
+    <button id="all-btn" type="button" hidden>See all bouquets</button>
+
+    <div id="gallery" hidden role="dialog" aria-label="Every bouquet">
+      <div class="gallery-head">
+        <div>
+          <h2>Every bouquet</h2>
+          <p id="gallery-count"></p>
+        </div>
+        <button id="gallery-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div id="gallery-grid"></div>
+    </div>
+    <div id="thumb-stage" aria-hidden="true"></div>
   </main>
 
   <script type="module" src="app.js"></script>

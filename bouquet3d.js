@@ -23,6 +23,11 @@ export const ROSE_COLORS = {
   yellow:   { petal: "#f6d25e", sheen: "#fff4c8" },
   burgundy: { petal: "#4e0614", sheen: "#8a2a3c" },
   orange:   { petal: "#e8631a", sheen: "#ffb07a" },
+  tulippink:   { petal: "#f27aa2" },
+  tulippurple: { petal: "#9a5cc4" },
+  tulipwhite:  { petal: "#fbf6ee" },
+  tulipcoral:  { petal: "#f47c5c" },
+  tulipyellow: { petal: "#f6cd45" },
   gardenia: { petal: "#fbf5e4", sheen: "#ffffff" },
 };
 // lily varieties: same flower shape, different coloring
@@ -32,7 +37,9 @@ const LILY_TINTS = {
   goldlily:  (t, c) => c.setRGB(1, lerp(0.74, 0.82, t), lerp(0.08, 0.16, t)),   // golden yellow
 };
 const isLilyKind = (c) => c in LILY_TINTS;
-const NOT_ROSES = ["sunflower", "gardenia", ...Object.keys(LILY_TINTS)];
+const TULIP_COLORS = { tulippink: "#f27aa2", tulippurple: "#9a5cc4", tulipwhite: "#fbf6ee", tulipcoral: "#f47c5c", tulipyellow: "#f6cd45" };
+const isTulip = (c) => c in TULIP_COLORS;
+const NOT_ROSES = ["sunflower", "gardenia", ...Object.keys(LILY_TINTS), ...Object.keys(TULIP_COLORS)];
 const isRose = (c) => !NOT_ROSES.includes(c);
 const GARDENIA_RINGS = [
   { n: 6, tilt: 1.4,  s: 1.0,  off: 0 },
@@ -259,6 +266,36 @@ function gardeniaPetalGeometry() {
   return g;
 }
 
+// Tulip petal: a deep spoon shape; six of them make the cup.
+function tulipPetalGeometry() {
+  const L = 0.95, W = 0.36, cols = 11, rows = 14, pos = [], col = [], idx = [];
+  for (let r = 0; r < rows; r++) {
+    const v = r / (rows - 1);
+    for (let c = 0; c < cols; c++) {
+      const u = (c / (cols - 1)) * 2 - 1;
+      const vv = v * (1 - 0.2 * u * u);
+      const w = W * Math.sin(Math.PI * (0.12 + 0.76 * vv));
+      const x = u * w, y = vv * L;
+      const z = -u * u * w * 0.8 + 0.14 * vv * vv;          // deep cup, lip opens slightly
+      pos.push(x, y, z);
+      const base = clamp01(1 - vv / 0.16);
+      const vein = 0.94 + 0.06 * Math.abs(u);
+      col.push(vein - 0.12 * base, vein - 0.04 * base, vein - 0.4 * base);
+    }
+  }
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
+      idx.push(a, d, b, b, d, e);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 // Silver-dollar eucalyptus: a round, slightly cupped leaf.
 function roundLeafGeometry() {
   const g = leafGeometry(0.42, 0.24, 0.05, 0.05);
@@ -295,6 +332,7 @@ const SHARED = {
   dollar: roundLeafGeometry(),
   willow: leafGeometry(1.25, 0.12, 0.05, 0.3),
   gardeniaPetal: gardeniaPetalGeometry(),
+  tulipPetal: tulipPetalGeometry(),
   drop: new THREE.SphereGeometry(1, 10, 8),
   spark: new THREE.OctahedronGeometry(1, 0),
   glossy: leafGeometry(0.85, 0.3, 0.14, 0.1),
@@ -303,9 +341,10 @@ const SHARED = {
 /* ---------- the scene ---------- */
 
 export class Bouquet3D {
-  constructor(container) {
+  constructor(container, opts = {}) {
     this.container = container;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.still = !!opts.still;          // still = only used to take pictures for the gallery
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: this.still });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -359,10 +398,27 @@ export class Bouquet3D {
       down = null;
     });
 
+    if (this.still) {
+      this.controls.autoRotate = false;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      return;
+    }
     new ResizeObserver(() => this.resize()).observe(container);
     window.__bouquet = this; // handy for debugging in the browser console
     this.resize();
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  // render one bouquet, fully bloomed, and return it as an image
+  snapshot(plan, width, height) {
+    this.renderer.setSize(width, height, false);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.build(plan, plan.r, false);
+    this.frame();
+    const url = this.renderer.domElement.toDataURL("image/png");
+    this.clear();
+    return url;
   }
 
   resize() {
@@ -401,7 +457,7 @@ export class Bouquet3D {
       const ring = Math.sqrt(1 - z * z);
       const phi = startPhi + k * GOLDEN;
       const dir = new THREE.Vector3(ring * Math.cos(phi), z, ring * Math.sin(phi));
-      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (isLilyKind(ro.color) || ro.color === "gardenia" ? 0.35 : -0.1) : 0));
+      const pos = center.clone().addScaledVector(dir, R + lerp(-0.12, 0.12, r()) + (vase ? (isLilyKind(ro.color) || ro.color === "gardenia" ? 0.35 : isTulip(ro.color) ? 0.2 : -0.1) : 0));
       pos.y = center.y + (pos.y - center.y) * stretchY;
       pos.x += lerp(-0.08, 0.08, r()); pos.z += lerp(-0.08, 0.08, r());
       const axis = pos.clone().sub(conv).normalize().lerp(dir, 0.6).normalize();
@@ -409,7 +465,7 @@ export class Bouquet3D {
         .multiply(new THREE.Quaternion().setFromAxisAngle(up, r() * Math.PI * 2));
       return {
         color: ro.color, pos, axis, q,
-        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : isLilyKind(ro.color) ? 1.75 : ro.color === "gardenia" ? 1.95 : (plan.vase && !plan.roses.some((x) => isLilyKind(x.color)) ? 1.18 : 1)),
+        scale: lerp(0.47, 0.55, r()) * (ro.color === "sunflower" ? 1.3 : isLilyKind(ro.color) ? 1.75 : ro.color === "gardenia" ? 1.95 : isTulip(ro.color) ? 1.3 : (plan.vase && !plan.roses.some((x) => isLilyKind(x.color)) ? 1.18 : 1)),
         tint: lerp(0, 1, r()),
         phase: r() * Math.PI * 2,
         delay: animate ? 0.25 + k * 0.07 + r() * 0.15 : -10,
@@ -476,6 +532,21 @@ export class Bouquet3D {
     }
 
     /* gardenias (only built when the bouquet has some) */
+    this.tulip = null;
+    if (this.roses.some((ro) => isTulip(ro.color))) {
+      const petals = new THREE.InstancedMesh(SHARED.tulipPetal, new THREE.MeshPhysicalMaterial({
+        vertexColors: true, side: THREE.DoubleSide, roughness: 0.42, sheen: 0.35, sheenColor: new THREE.Color("#ffffff"), clearcoat: 0.3,
+      }), n * 6);
+      petals.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      petals.frustumCulled = false;
+      g.add(petals);
+      this.roses.forEach((ro, k) => {
+        tint.set(TULIP_COLORS[ro.color] || "#ffffff").multiplyScalar(lerp(0.92, 1.04, ro.tint));
+        for (let j = 0; j < 6; j++) petals.setColorAt(k * 6 + j, tint);
+      });
+      this.tulip = { petals };
+    }
+
     this.gard = null;
     if (this.roses.some((ro) => ro.color === "gardenia")) {
       const petals = new THREE.InstancedMesh(SHARED.gardeniaPetal, new THREE.MeshPhysicalMaterial({
@@ -710,6 +781,7 @@ export class Bouquet3D {
 
   addVase(g, type) {
     if (type === "ceramic") return this.addCeramicVase(g);
+    if (type === "ribbed") return this.addRibbedVase(g);
     const glass = (opacity, color = "#eef7f6") => new THREE.MeshPhysicalMaterial({
       color, transparent: true, opacity, roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05,
       side: THREE.DoubleSide, depthWrite: false,
@@ -736,6 +808,51 @@ export class Bouquet3D {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = -2.72;
     g.add(shadow);
+  }
+
+  // tinted sea-glass vase with vertical ribs, flaring at the top
+  addRibbedVase(g) {
+    const yb = -2.7, yt = 0.05;
+    const radius = (y) => lerp(0.56, 0.98, Math.pow((y - yb) / (yt - yb), 1.7));
+    const segT = 120, segY = 36, pos = [], idx = [];
+    for (let j = 0; j <= segY; j++) {
+      const y = lerp(yb, yt, j / segY);
+      for (let i = 0; i <= segT; i++) {
+        const th = (i / segT) * Math.PI * 2;
+        const r = radius(y) * (1 + 0.04 * Math.cos(th * 22));
+        pos.push(Math.cos(th) * r, y, Math.sin(th) * r);
+      }
+    }
+    for (let j = 0; j < segY; j++)
+      for (let i = 0; i < segT; i++) {
+        const a = j * (segT + 1) + i, b = a + 1, c = a + segT + 1, d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const glass = (opacity, color) => new THREE.MeshPhysicalMaterial({
+      color, transparent: true, opacity, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide, depthWrite: false,
+    });
+    const body = new THREE.Mesh(geo, glass(0.34, "#b9ddd2"));
+    body.renderOrder = 3;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(radius(yt), 0.03, 8, 72), glass(0.6, "#d6efe8"));
+    rim.rotation.x = Math.PI / 2; rim.position.y = yt; rim.renderOrder = 3;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.22, 56), glass(0.5, "#a9d3c6"));
+    base.position.y = yb + 0.11; base.renderOrder = 2;
+    const waterTop = -1.0;
+    const waterPts = [];
+    for (let j = 0; j <= 12; j++) { const y = lerp(yb + 0.22, waterTop, j / 12); waterPts.push(new THREE.Vector2(radius(y) * 0.93, y)); }
+    const water = new THREE.Mesh(new THREE.LatheGeometry(waterPts, 56), glass(0.16, "#cdeee8"));
+    water.renderOrder = 1;
+    const surface = new THREE.Mesh(new THREE.CircleGeometry(radius(waterTop) * 0.93, 48), glass(0.22, "#e2f6f2"));
+    surface.rotation.x = -Math.PI / 2; surface.position.y = waterTop; surface.renderOrder = 1;
+    const shine = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 2.4), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.35, depthWrite: false }));
+    shine.position.set(0.48, -1.25, 0.62); shine.rotation.y = 0.65; shine.renderOrder = 4;
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.2, 40), new THREE.MeshBasicMaterial({ color: "#3a6a5a", transparent: true, opacity: 0.08, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = yb - 0.01;
+    g.add(water, surface, base, body, rim, shine, shadow);
   }
 
   // glossy blush ceramic vase: rounded body, slim neck, flared lip, gold trim
@@ -821,6 +938,7 @@ export class Bouquet3D {
       if (this.sun) this.updateSunflower(k, isSun ? head : null, open, pop);
       if (this.lily) this.updateLily(k, isLily ? head : null, open, pop);
       if (this.gard) this.updateGardenia(k, ro.color === "gardenia" ? head : null, open, pop);
+      if (this.tulip) this.updateTulip(k, isTulip(ro.color) ? head : null, open, pop);
       for (let i = 0; i < PETALS; i++) {
         if (!isRose(ro.color)) { this.petalMeshes[i].setMatrixAt(k, ZERO); continue; }
         const ti = i / (PETALS - 1);
@@ -838,7 +956,7 @@ export class Bouquet3D {
         p.multiplyMatrices(ry, rx);
         p.setPosition(0, -0.05, 0);
         m.multiplyMatrices(head, p);
-        this.sepals.setMatrixAt(k * 5 + j, isLily || ro.color === "gardenia" ? ZERO : m);
+        this.sepals.setMatrixAt(k * 5 + j, isLily || ro.color === "gardenia" || isTulip(ro.color) ? ZERO : m);
       }
     });
     this.petalMeshes.forEach((mesh) => (mesh.instanceMatrix.needsUpdate = true));
@@ -846,6 +964,24 @@ export class Bouquet3D {
     if (this.sun) ["rays", "disk", "calyx", "seeds"].forEach((key) => (this.sun[key].instanceMatrix.needsUpdate = true));
     if (this.lily) ["outer", "inner", "stamens"].forEach((key) => (this.lily[key].instanceMatrix.needsUpdate = true));
     if (this.gard) ["petals", "leaves"].forEach((key) => (this.gard[key].instanceMatrix.needsUpdate = true));
+    if (this.tulip) this.tulip.petals.instanceMatrix.needsUpdate = true;
+  }
+
+  // six cupped petals: a closed egg that opens into a soft cup
+  updateTulip(k, head, open, pop) {
+    const { petals } = this.tulip;
+    if (!head) { for (let j = 0; j < 6; j++) petals.setMatrixAt(k * 6 + j, ZERO); return; }
+    const m = new THREE.Matrix4(), p = new THREE.Matrix4(), ry = new THREE.Matrix4(), rx = new THREE.Matrix4(), sc = new THREE.Matrix4();
+    for (let i = 0; i < 6; i++) {
+      const inner = i % 2 === 1;
+      const tilt = (inner ? lerp(-0.05, 0.16, open) : lerp(0.0, 0.3, open)) + pop * 0.3;
+      ry.makeRotationY((i / 6) * Math.PI * 2);
+      rx.makeRotationX(tilt);
+      p.multiplyMatrices(ry, rx);
+      if (inner) p.multiply(sc.makeScale(0.94, 0.96, 0.94));
+      p.setPosition(Math.sin((i / 6) * Math.PI * 2) * (inner ? 0.02 : 0.05), 0, Math.cos((i / 6) * Math.PI * 2) * (inner ? 0.02 : 0.05));
+      petals.setMatrixAt(k * 6 + i, m.multiplyMatrices(head, p));
+    }
   }
 
   // rings of waxy petals spiraling open, with three glossy leaves underneath
@@ -951,12 +1087,14 @@ export class Bouquet3D {
     if (this.sun) targets.push(this.sun.rays, this.sun.disk);
     if (this.lily) targets.push(this.lily.outer, this.lily.inner);
     if (this.gard) targets.push(this.gard.petals);
+    if (this.tulip) targets.push(this.tulip.petals);
     const hit = this.raycaster.intersectObjects(targets, false)[0];
     if (!hit || hit.instanceId == null) { if (this.pick) this.putBack(); return; }
     let id = hit.instanceId;
     if (this.sun && hit.object === this.sun.rays) id = Math.floor(id / SUN_RAYS);
     if (this.lily && (hit.object === this.lily.outer || hit.object === this.lily.inner)) id = Math.floor(id / 3);
     if (this.gard && hit.object === this.gard.petals) id = Math.floor(id / GARDENIA_PETALS);
+    if (this.tulip && hit.object === this.tulip.petals) id = Math.floor(id / 6);
     this.onInteract?.();
     if (this.pick && this.pick.k === id) { this.putBack(); return; }
     this.pickUp(id);

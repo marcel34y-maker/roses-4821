@@ -9,7 +9,7 @@ A little app for her phone. Every day she gets a new **3D bouquet** of pink, whi
 - **💗 Love:** hearts float up out of the whole bouquet.
 - A counter shows which bouquet number it is.
 - Every day is different: 11 color mixes, 19–25 roses, 5 wrapping papers, 4 ribbons, sometimes baby's breath, all arranged differently. It changes at 8:00 am her time (set `newDayHour` in `app.js`).
-- The dots at the bottom let her look back at the last 7 days.
+- The dots at the bottom let her look back at the last 7 days, and **See all bouquets** opens a gallery of every bouquet she's ever gotten (tap one to see it again).
 - It works offline once it's installed.
 
 ## 1. Personalize (2 minutes)
@@ -61,7 +61,7 @@ Everything goes in `notes.json`. You can edit it from your phone on github.com (
 
 ## Pick-up messages
 
-The little messages that pop up when she picks a flower live under `"whispers"` in `notes.json`. Add, change or delete any of them.
+The little messages that pop up when she picks a flower live under `"whispers"` in `notes.json` (60 to start). She sees every one once, in a shuffled order, before any repeat. Add, change or delete any of them.
 
 ## Special bouquets (sunflowers!)
 
@@ -73,7 +73,7 @@ Roses are the everyday flower. To pick a specific bouquet for a day, add it unde
 }
 ```
 
-Options: `Velvet` (red and burgundy roses, pink lilies and gardenias in a blush ceramic vase with gold trim), `Harvest` (fall bouquet: burgundy, burnt-orange and peach roses, tiger and golden lilies, autumn leaves, kraft paper), `Sweetheart` (pink lilies, gardenias, pink and red roses in a glass vase), `Autumn Sunrise` (orange tiger lilies, golden lilies, sunflowers, red and peach roses in a glass vase), `Sorbet & Gardenias` (gardenias with peach, lavender, coral and yellow roses in a glass vase), `Roses in a Vase` (pink, white and red roses with eucalyptus in a glass vase), `Lilies & Roses` (pink lilies, roses and eucalyptus in a glass vase), `Sunflowers`, `Sunshine` (sunflowers + white roses), `Sunset` (sunflowers + red roses), or any rose mix: `Classic Red`, `Blush`, `Ivory`, `Red & Ivory`, `Blush & Ivory`, `Red & Blush`, `All Three`, `Garden Party`, `Be Mine`, `First Snow`, `Cotton Candy`.
+Options: `Tulip Garden` (pink, purple, coral and white tulips with white roses in a ribbed sea-glass vase), `Velvet` (red and burgundy roses, pink lilies and gardenias in a blush ceramic vase with gold trim), `Harvest` (fall bouquet: burgundy, burnt-orange and peach roses, tiger and golden lilies, autumn leaves, kraft paper), `Sweetheart` (pink lilies, gardenias, pink and red roses in a glass vase), `Autumn Sunrise` (orange tiger lilies, golden lilies, sunflowers, red and peach roses in a glass vase), `Sorbet & Gardenias` (gardenias with peach, lavender, coral and yellow roses in a glass vase), `Roses in a Vase` (pink, white and red roses with eucalyptus in a glass vase), `Lilies & Roses` (pink lilies, roses and eucalyptus in a glass vase), `Sunflowers`, `Sunshine` (sunflowers + white roses), `Sunset` (sunflowers + red roses), or any rose mix: `Classic Red`, `Blush`, `Ivory`, `Red & Ivory`, `Blush & Ivory`, `Red & Blush`, `All Three`, `Garden Party`, `Be Mine`, `First Snow`, `Cotton Candy`.
 
 ## Previewing a day
 

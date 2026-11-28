@@ -67,6 +67,7 @@ const SPECIAL_STYLES = [
   { name: "Sweetheart", mix: { lily: 0.3, gardenia: 0.25, pink: 0.25, red: 0.2 }, count: [16, 18], vase: true, buds: 5 },
   { name: "Harvest", mix: { burgundy: 0.28, orange: 0.26, peach: 0.14, tigerlily: 0.2, goldlily: 0.12 }, count: [17, 19], wrap: 0, ribbon: "#9a3b1b", autumn: true, filler: false },
   { name: "Velvet", mix: { red: 0.4, burgundy: 0.28, lily: 0.2, gardenia: 0.12 }, count: [17, 19], vase: "ceramic", buds: 4 },
+  { name: "Tulip Garden", mix: { tulippink: 0.26, tulippurple: 0.2, tulipcoral: 0.16, tulipwhite: 0.16, white: 0.22 }, count: [18, 20], vase: "ribbed" },
   { name: "Lilies & Roses", mix: { lily: 0.55, pink: 0.22, white: 0.15, red: 0.08 }, count: [14, 16], vase: true, buds: 8 },
 ];
 
@@ -78,6 +79,8 @@ const WRAPS = [
   { front: "#3a3540", back: "#26222a" },  // midnight
 ];
 const RIBBONS = ["#b3122b", "#f2a5b8", "#fffaf2", "#c9a24a"];
+
+const ROSE_KINDS = ["red", "pink", "white", "peach", "lavender", "coral", "yellow", "burgundy", "orange"];
 
 function chooseColor(mix, r) {
   let x = r(), acc = 0;
@@ -170,22 +173,26 @@ function getScene() {
   return scene;
 }
 
-/* little messages that pop up when she picks a flower (add your own in notes.json "whispers") */
-const DEFAULT_WHISPERS = [
-  "I love you", "You're my favorite person", "Thinking of you", "You make me so happy",
-  "Can't wait to see you", "You're beautiful", "Lucky me", "Always yours",
-];
-let whisperTimer, lastWhisper = -1;
+/* little messages that pop up when she picks a flower (edit them in notes.json "whispers").
+   She sees every one once, in a shuffled order, before any repeats, even across days. */
+const DEFAULT_WHISPERS = ["I love you", "You're my favorite person", "Thinking of you", "You make me so happy"];
+let whisperTimer;
+function whisperOrder(list) {
+  const r = rng("whispers:" + list.length);
+  const order = list.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  return order;
+}
 function whisper() {
-  const list = (NOTES.whispers && NOTES.whispers.length ? NOTES.whispers : DEFAULT_WHISPERS);
-  let i = Math.floor(Math.random() * list.length);
-  if (list.length > 1 && i === lastWhisper) i = (i + 1) % list.length;
-  lastWhisper = i;
+  const list = NOTES.whispers && NOTES.whispers.length ? NOTES.whispers : DEFAULT_WHISPERS;
+  const order = whisperOrder(list);
+  const n = parseInt(storage.get("whisper-n") || "0", 10) || 0;
+  storage.set("whisper-n", String(n + 1));
   const el = $("whisper");
-  el.textContent = `${list[i]} ♡`;
+  el.textContent = `${list[order[n % list.length]]} ♡`;
   el.classList.add("show");
   clearTimeout(whisperTimer);
-  whisperTimer = setTimeout(() => el.classList.remove("show"), 3200);
+  whisperTimer = setTimeout(() => el.classList.remove("show"), 3400);
 }
 
 function bouquetNumber(key) {
@@ -204,7 +211,7 @@ function showDay(key, animate) {
 
   const label = $("bouquet-name");
   const allOf = (c) => plan.roses.every((x) => x.color === c);
-  const kinds = allOf("sunflower") ? "sunflowers" : plan.roses.every((x) => !["sunflower", "lily", "tigerlily", "goldlily", "gardenia"].includes(x.color)) ? "roses" : "flowers";
+  const kinds = allOf("sunflower") ? "sunflowers" : plan.roses.every((x) => ROSE_KINDS.includes(x.color)) ? "roses" : "flowers";
   const num = bouquetNumber(key);
   label.textContent = `${plan.name} · ${plan.roses.length} ${kinds}` + (num > 0 ? ` · bouquet #${num}` : "");
   label.hidden = false;
@@ -225,6 +232,86 @@ function showDay(key, animate) {
     note.hidden = true;
   }
   renderDays();
+}
+
+/* ---------- every bouquet she's gotten ---------- */
+let thumbScene = null;
+const thumbs = new Map();
+const thumbQueue = [];
+let thumbBusy = false;
+
+function receivedDays() {
+  const days = [];
+  const first = parseYmd(CONFIG.firstDay);
+  let d = parseYmd(todayKey);
+  if (!storage.get("opened-" + todayKey)) d = addDays(d, -1);   // today only after she opens it
+  for (; d >= first; d = addDays(d, -1)) days.push(ymd(d));
+  return days;
+}
+
+function queueThumb(key, img) {
+  if (thumbs.has(key)) { img.src = thumbs.get(key); img.classList.add("ready"); return; }
+  thumbQueue.push({ key, img });
+  pumpThumbs();
+}
+
+function pumpThumbs() {
+  if (thumbBusy || !thumbQueue.length) return;
+  thumbBusy = true;
+  const { key, img } = thumbQueue.shift();
+  setTimeout(() => {
+    try {
+      if (!thumbScene) thumbScene = new Bouquet3D($("thumb-stage"), { still: true });
+      const url = thumbScene.snapshot(planFor(key), 300, 340);
+      thumbs.set(key, url);
+      img.src = url;
+      img.classList.add("ready");
+    } catch (_) { /* leave the soft placeholder */ }
+    thumbBusy = false;
+    pumpThumbs();
+  }, 30);
+}
+
+function openGallery() {
+  const grid = $("gallery-grid");
+  grid.innerHTML = "";
+  const days = receivedDays();
+  $("gallery-count").textContent = `${days.length} bouquet${days.length === 1 ? "" : "s"} so far`;
+  const seen = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      seen.unobserve(en.target);
+      queueThumb(en.target.dataset.key, en.target.querySelector("img"));
+    });
+  }, { root: $("gallery"), rootMargin: "200px" });
+
+  days.forEach((key) => {
+    const plan = planFor(key);
+    const d = parseYmd(key);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "card";
+    card.dataset.key = key;
+    const note = noteFor(key);
+    card.innerHTML = `
+      <div class="thumb"><img alt=""></div>
+      <span class="card-num">#${bouquetNumber(key)}</span>
+      <span class="card-date">${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
+      <span class="card-name">${plan.name}</span>
+      ${note ? `<span class="card-note"></span>` : ""}`;
+    if (note) card.querySelector(".card-note").textContent = note.replace(/\n/g, " ");
+    card.onclick = () => { closeGallery(); showDay(key, true); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    grid.appendChild(card);
+    seen.observe(card);
+  });
+  $("gallery").hidden = false;
+  document.body.classList.add("no-scroll");
+  $("gallery").scrollTop = 0;
+}
+
+function closeGallery() {
+  $("gallery").hidden = true;
+  document.body.classList.remove("no-scroll");
 }
 
 function renderDays() {
@@ -249,6 +336,10 @@ function renderDays() {
     nav.appendChild(btn);
   }
   nav.hidden = nav.children.length < 2;
+  const total = receivedDays().length;
+  const all = $("all-btn");
+  all.hidden = total < 2;
+  all.textContent = `See all ${total} bouquets`;
 }
 
 function showGift() {
@@ -263,6 +354,8 @@ function showGift() {
 }
 
 $("btn-water").addEventListener("click", () => scene && scene.water());
+$("all-btn").addEventListener("click", openGallery);
+$("gallery-close").addEventListener("click", closeGallery);
 $("btn-love").addEventListener("click", () => scene && scene.love());
 
 $("gift").addEventListener("click", () => {
@@ -283,7 +376,8 @@ const preview = new URLSearchParams(location.search).get("day");
 
 (async function start() {
   await loadNotes();
-  if (preview) showDay(preview, true);
+  if (new URLSearchParams(location.search).has("gallery")) { showDay(todayKey, false); openGallery(); }
+  else if (preview) showDay(preview, true);
   else if (storage.get("opened-" + todayKey)) showDay(todayKey, false);
   else showGift();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
